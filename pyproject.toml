@@ -1,0 +1,24 @@
+[project]
+name = "constraint-scanner"
+version = "0.1.0"
+description = "Deterministic arbitrage scanner for prediction markets"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.8",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.scripts]
+constraint-scanner = "constraint_scanner.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
