@@ -20,6 +20,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "hold_band": 0.05,  # don't churn when already-held edge is within this
     "max_price_impact": 0.10,  # never move the price by more than this
     "min_order_mana": 5,  # skip orders smaller than this
+    "max_run_budget": 200,  # hard cap on total mana a single run may spend
 }
 
 

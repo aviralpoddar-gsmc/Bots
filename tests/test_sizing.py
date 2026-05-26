@@ -42,3 +42,22 @@ def test_amount_capped_by_max_order_size():
     d = compute_trade(estimate=0.99, current_prob=0.01, position=None,
                       liquidity=1_000_000, limits=DEFAULT_LIMITS)
     assert d is not None and d["amount"] <= DEFAULT_LIMITS["max_order_size"]
+
+
+def test_cap_to_budget_keeps_highest_edge_within_budget():
+    from quantbots.runner import _cap_to_budget
+    signals = [
+        {"market_id": "a", "amount": 25, "edge": 0.10},
+        {"market_id": "b", "amount": 25, "edge": 0.30},  # highest edge
+        {"market_id": "c", "amount": 25, "edge": 0.20},
+    ]
+    kept = _cap_to_budget(signals, budget=50)
+    ids = {s["market_id"] for s in kept}
+    assert ids == {"b", "c"}            # the two highest-edge that fit in 50
+    assert sum(s["amount"] for s in kept) <= 50
+
+
+def test_cap_to_budget_none_is_unlimited():
+    from quantbots.runner import _cap_to_budget
+    signals = [{"market_id": "a", "amount": 25, "edge": 0.1}]
+    assert _cap_to_budget(signals, None) == signals

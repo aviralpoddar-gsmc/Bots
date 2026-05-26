@@ -97,9 +97,28 @@ def _decide(bot: BotConfig, strategy: Strategy, markets: list[dict],
                         "estimate": est,
                         "direction": decision["direction"],
                         "amount": decision["amount"],
+                        "edge": abs(est - m["probability"]),
                     }
                 )
     return signals
+
+
+def _cap_to_budget(signals: list[dict], budget: float | None) -> list[dict]:
+    """Keep the highest-edge signals whose cumulative amount fits the budget.
+
+    A hard ceiling on what one run can spend — without it a large/grown market
+    cache can drain the whole balance in a single run.
+    """
+    if not budget or budget <= 0:
+        return signals
+    kept: list[dict] = []
+    spent = 0.0
+    for s in sorted(signals, key=lambda x: x["edge"], reverse=True):
+        if spent + s["amount"] > budget:
+            continue
+        kept.append(s)
+        spent += s["amount"]
+    return kept
 
 
 def run_bot(
@@ -118,6 +137,8 @@ def run_bot(
     markets = strategy.prefilter(store.load_open_markets())
     positions = store.open_positions(bot_id)
     signals = _decide(bot, strategy, markets, positions)
+    # Hard total-budget ceiling for this run (highest-edge signals first).
+    signals = _cap_to_budget(signals, bot.limits.get("max_run_budget"))
 
     result = RunResult(bot=bot.name, dry_run=dry_run, n_markets=len(markets), signals=signals)
     if not signals:

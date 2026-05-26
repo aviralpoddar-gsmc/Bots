@@ -119,9 +119,12 @@ def refresh(
 def run(
     bot: str = typer.Option(..., "--bot", help="Bot name from config/bots.yaml"),
     live: bool = typer.Option(False, "--live", help="Actually place bets (default: dry-run)"),
+    budget: float = typer.Option(0, "--budget", help="Override max mana this run may spend"),
 ) -> None:
     """Run one bot. Dry-run by default — validates orders without moving mana."""
     cfg = load_bot(bot)
+    if budget > 0:
+        cfg.limits["max_run_budget"] = budget
     if not cfg.api_key:
         raise typer.BadParameter(f"No key in env var {cfg.account_env!r}")
     strat = get_strategy(cfg.strategy, **cfg.params)
