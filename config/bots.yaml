@@ -68,9 +68,17 @@ bots:
       annual_vol: 0.30    # soft-commodity annualized vol; scaled by sqrt(years-to-close)
 
   # Local-LLM bot (requires the `llm` extra + a running local model).
+  # Trades the long tail the deterministic bots can't link, by reasoning about the
+  # underlying quantity. qwen3:8b won the local forecasting benchmark.
   - name: llm_forecaster
     strategy: llm
     account_env: MANIFOLD_CLONE_API_KEY
-    enabled: false
+    enabled: true
+    limits:
+      max_order_size: 20
+      hold_band: 0.05
+      max_run_budget: 150
     params:
-      model: gemma2
+      model: qwen3:8b
+      spread_mult: 1.5    # widen overconfident model bands before pricing
+      max_groups: 20      # cap LLM calls per run (~10s each)

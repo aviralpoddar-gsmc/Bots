@@ -32,9 +32,22 @@ _SYSTEM = (
 class LLMStrategy(Strategy):
     name = "llm"
 
-    def __init__(self, model: str | None = None, **params: object):
-        super().__init__(model=model, **params)
+    def __init__(
+        self,
+        model: str | None = None,
+        spread_mult: float = 1.5,
+        max_groups: int = 20,
+        **params: object,
+    ):
+        super().__init__(model=model, spread_mult=spread_mult, max_groups=max_groups, **params)
         self.llm = LocalLLM(model=model)
+        # Local models are overconfident (benchmark: ~57% coverage vs ideal ~80%),
+        # so their p10-p90 bands are too narrow. Widen the percentile spread around
+        # the median by this factor before reading probabilities off the CDF.
+        self.spread_mult = spread_mult
+        # Bound LLM calls per run (each group = one call, ~10s); the run's budget
+        # cap then bounds spend among whatever this produces.
+        self.max_groups = max_groups
 
     def prefilter(self, markets: list[Market]) -> list[Market]:
         markets = super().prefilter(markets)
@@ -45,7 +58,8 @@ class LLMStrategy(Strategy):
         groups: dict[str, list[Market]] = {}
         for m in markets:
             groups.setdefault(measurable_key(m), []).append(m)
-        return list(groups.values())
+        # Cap the number of LLM calls per run (one call per group).
+        return list(groups.values())[: self.max_groups]
 
     def _ask_percentiles(self, group: list[Market]) -> dict | None:
         subject = measurable_key(group[0])
@@ -66,7 +80,10 @@ class LLMStrategy(Strategy):
         pct = self._ask_percentiles(group)
         if pct is None:
             return {}
-        values = [float(pct[k]) for k in _KEYS]
+        values = sorted(float(pct[k]) for k in _KEYS)
+        # Widen the band around the median to counter model overconfidence.
+        median = values[2]
+        values = [median + self.spread_mult * (v - median) for v in values]
         out: dict[str, float] = {}
         for m in group:
             if m.get("threshold") is None:
