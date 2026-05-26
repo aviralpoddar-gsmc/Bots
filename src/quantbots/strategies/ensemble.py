@@ -22,6 +22,7 @@ several feeds for the same market.
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 from .base import Market, Strategy
@@ -37,17 +38,21 @@ class EnsembleStrategy(Strategy):
 
     def __init__(
         self,
-        sigma: float = 0.25,
+        annual_vol: float = 0.5,
         source_weights: dict[str, float] | None = None,
         entity_map: dict[str, list[str]] | None = None,
         max_ratio: float = 20.0,
+        min_vol: float = 0.05,
         **params: Any,
     ):
         super().__init__(
-            sigma=sigma, source_weights=source_weights, entity_map=entity_map,
-            max_ratio=max_ratio, **params,
+            annual_vol=annual_vol, source_weights=source_weights, entity_map=entity_map,
+            max_ratio=max_ratio, min_vol=min_vol, **params,
         )
-        self.sigma = sigma
+        # Volatility is horizon-scaled: effective sigma = annual_vol * sqrt(years
+        # to close), floored at min_vol so near-dated markets aren't priced at 0/1.
+        self.annual_vol = annual_vol
+        self.min_vol = min_vol
         self.source_weights = source_weights or {}
         self.entity_map = entity_map
         # Plausibility guard: if a market's threshold and the observed value differ
@@ -60,7 +65,17 @@ class EnsembleStrategy(Strategy):
     def bind(self, observations: Any) -> None:
         self._obs = observations
 
-    def _signal_prob(self, value: float, threshold: float, direction: str) -> float | None:
+    def _effective_sigma(self, market: Market) -> float:
+        """annual_vol scaled by sqrt(years to close), floored at min_vol."""
+        close = market.get("closeTime")
+        tau = 1.0
+        if close:
+            tau = (close / 1000.0 - time.time()) / (365.25 * 24 * 3600)
+        return max(self.annual_vol * math.sqrt(max(tau, 0.0)), self.min_vol)
+
+    def _signal_prob(
+        self, value: float, threshold: float, direction: str, sigma: float
+    ) -> float | None:
         """P(quantity clears threshold) for one numeric signal, via lognormal."""
         if value <= 0:
             return None
@@ -68,7 +83,7 @@ class EnsembleStrategy(Strategy):
             # A positive quantity essentially always exceeds a non-positive bound.
             surv = 0.99
         else:
-            z = math.log(threshold / value) / max(self.sigma, 1e-6)
+            z = math.log(threshold / value) / max(sigma, 1e-6)
             surv = 1.0 - _norm_cdf(z)  # P(future value > threshold)
         return surv if direction == "exceeds" else 1.0 - surv
 
@@ -80,6 +95,7 @@ class EnsembleStrategy(Strategy):
             link = link_market(m, self.entity_map)
             if link is None or link.threshold is None:
                 continue
+            sigma = self._effective_sigma(m)
             probs: list[float] = []
             weights: list[float] = []
             for entity in link.entities:
@@ -92,7 +108,7 @@ class EnsembleStrategy(Strategy):
                     ratio = max(value / link.threshold, link.threshold / value)
                     if ratio > self.max_ratio:
                         continue
-                p = self._signal_prob(value, link.threshold, link.direction)
+                p = self._signal_prob(value, link.threshold, link.direction, sigma)
                 if p is None:
                     continue
                 probs.append(p)

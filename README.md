@@ -77,9 +77,10 @@ market. Sources mirror the strategy pattern — small independent modules under
 `sources/`, listed by `quantbots sources`, configured in `config/sources.yaml`,
 fetched by `quantbots ingest`.
 
-Built-in (keyless): `stooq` (commodity/FX/index prices), `worldbank` (macro:
-CPI, GDP, unemployment), `rss` (news headlines). To add one: implement a
-`Source` subclass (`fetch() -> list[Observation]`), register it in
+Built-in (keyless): `stooq` (commodity/FX/index prices + equities), `fred` (US
+macro series via the public CSV — mortgage rate, housing starts, ...), `worldbank`
+(global macro: CPI, GDP, unemployment), `rss` (news headlines). To add one:
+implement a `Source` subclass (`fetch() -> list[Observation]`), register it in
 `sources/__init__.py`, and add it to `config/sources.yaml`.
 
 An **Observation** is the normalized unit — `value` for numbers, `text` for news,
@@ -178,22 +179,30 @@ trade at prob 1.0/0.0 — no special-case code.
   "make the bot smarter" move: reason about the *quantity*, not 30 yes/no
   questions.
 
-### Linking & market coverage (important)
+### Linking & market coverage
 
 Trading on data hinges on **linking** a market to the right source `entity`. The
-current linker is deterministic keyword-matching — transparent, but coarse.
-Against the live market set it links **~0** markets, and that's correct: the
-platform's markets are deep fundamental/specialist questions (rare-earth balances
-in t REO, company revenue/leverage, niche indices like Cotlook A, sector macro),
-not broad "will gold exceed $X" price bets. Our three seed feeds don't cover them,
-so the linker abstains rather than emitting confident wrong estimates.
+linker (`strategies/linker.py`) is deterministic, with three matchers:
 
-To actually trade these, the next work is **(a)** domain-specific sources matching
-the markets' quantities (USGS/rare-earth, agricultural indices, company financials,
-FRED sector macro) and **(b)** semantic linking (local-LLM/embeddings) that can
-tell "Cerium balance" from "CNOOC revenue" and match units/dates. The pipeline
-itself — sources → observations → linker → ensemble → sizing → execution — is
-done and validated end-to-end.
+1. **Stock tickers** — `"... (WULF) stock price ..."` → `STOCK_WULF` (auto-general,
+   paired with a Stooq `wulf.us` feed). No per-ticker curation.
+2. **Curated catalog** — a precise phrase → exact series entity (e.g. single-family
+   housing starts → `FRED_HOUST1F`). Add a line per series as feeds are added.
+3. **Commodity keywords** — broad names, suppressed by exclusion keywords when the
+   question is about an out-of-scope metric (volume/production/reserves/share).
+
+We started with the cleanest deterministic numeric clusters: **US macro via FRED**
+(30y mortgage rate, housing starts) and **equity prices via Stooq** (WULF). These
+link cleanly because the entity + threshold + unit parse unambiguously. Against the
+live set the linker now maps ~48 markets and the `ensemble` bot produces sensible
+data-driven estimates on them.
+
+The platform's *long tail* (rare-earth balances in t REO, company revenue/leverage,
+niche indices like Cotlook A) needs **(a)** domain-specific sources matching those
+quantities and **(b)** semantic linking (local-LLM/embeddings) to distinguish
+entity + metric + unit + date. The pipeline — sources → observations → linker →
+ensemble → sizing → execution — is done and validated end-to-end; widening it is
+now a matter of adding sources + catalog entries.
 
 ---
 

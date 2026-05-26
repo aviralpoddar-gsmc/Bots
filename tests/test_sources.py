@@ -18,7 +18,7 @@ class _Resp:
 
 
 def test_registry_lists_sources():
-    assert {"stooq", "worldbank", "rss"} <= set(available())
+    assert {"stooq", "worldbank", "fred", "rss"} <= set(available())
 
 
 def _stooq_csv(symbol, close):
@@ -59,6 +59,20 @@ def test_worldbank_parses_latest(monkeypatch):
     obs = src.fetch()
     assert len(obs) == 1
     assert obs[0].entity == "US_CPI_YOY" and obs[0].value == 3.1
+
+
+def test_fred_takes_latest_non_missing(monkeypatch):
+    csv = (
+        "observation_date,MORTGAGE30US\n"
+        "2026-05-07,6.55\n"
+        "2026-05-14,.\n"          # missing values are "."
+        "2026-05-21,6.51\n"
+    )
+    monkeypatch.setattr("quantbots.sources.fred.requests.get", lambda *a, **k: _Resp(text=csv))
+    src = get_source("fred", series=[{"entity": "FRED_MORTGAGE30US", "id": "MORTGAGE30US"}])
+    obs = src.fetch()
+    assert len(obs) == 1
+    assert obs[0].entity == "FRED_MORTGAGE30US" and obs[0].value == 6.51
 
 
 def test_rss_parses_items(monkeypatch):

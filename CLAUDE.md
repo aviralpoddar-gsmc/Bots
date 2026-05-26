@@ -70,7 +70,7 @@ src/quantbots/
   strategies/ensemble.py       # fuse ingested observations -> fair value (deterministic)
   strategies/linker.py         # map market question -> source entity + threshold (heuristic)
   sources/base.py        # Source ABC: fetch() -> list[Observation] (external data)
-  sources/{stooq,worldbank,rss}.py  # keyless feeds: prices / macro / news
+  sources/{stooq,fred,worldbank,rss}.py  # keyless feeds: prices+equities / US macro / global macro / news
   sources/ingest.py      # fetch configured sources -> observations cache
   llm/client.py          # OpenAI-compatible client pointed at a LOCAL endpoint
   llm/health.py          # Ollama wedge probe + watchdog

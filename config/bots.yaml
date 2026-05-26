@@ -39,9 +39,10 @@ bots:
       max_order_size: 25
       hold_band: 0.05
     params:
-      sigma: 0.25          # assumed relative volatility over the horizon
+      annual_vol: 0.5      # annualized vol; scaled by sqrt(time-to-close) per market
       source_weights:      # trust per source when averaging signals
         stooq: 1.0
+        fred: 1.0
         worldbank: 1.0
 
   # Local-LLM bot (requires the `llm` extra + a running local model).

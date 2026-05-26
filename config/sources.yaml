@@ -5,7 +5,9 @@
 # - params:  passed as **kwargs to the Source constructor
 
 sources:
-  # Commodities / FX / indices (keyless).
+  # Commodities / FX / indices / equities (keyless).
+  # Equity tickers use entity STOCK_<TICKER> with stooq symbol <ticker>.us, which
+  # the linker maps to automatically from "(TICKER) stock price" questions.
   - name: stooq
     enabled: true
     params:
@@ -16,6 +18,15 @@ sources:
         SILVER: si.f
         COPPER: hg.f
         NATGAS: ng.f
+        STOCK_WULF: wulf.us
+
+  # US macro series (keyless FRED CSV). entity FRED_<SERIESID>.
+  - name: fred
+    enabled: true
+    params:
+      series:
+        - { entity: FRED_MORTGAGE30US, id: MORTGAGE30US }
+        - { entity: FRED_HOUST1F, id: HOUST1F }
 
   # Macro / economic indicators (keyless).
   - name: worldbank

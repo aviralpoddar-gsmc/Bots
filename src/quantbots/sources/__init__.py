@@ -12,8 +12,9 @@ from .base import Observation, Source
 
 # name -> "module path:ClassName"
 _REGISTRY: dict[str, str] = {
-    "stooq": "quantbots.sources.stooq:StooqSource",        # commodities / FX / indices
-    "worldbank": "quantbots.sources.worldbank:WorldBankSource",  # macro / econ
+    "stooq": "quantbots.sources.stooq:StooqSource",        # commodities / FX / indices / equities
+    "worldbank": "quantbots.sources.worldbank:WorldBankSource",  # macro / econ (global, annual)
+    "fred": "quantbots.sources.fred:FredSource",           # US macro series (keyless CSV)
     "rss": "quantbots.sources.rss:RSSSource",              # news / text
 }
 
