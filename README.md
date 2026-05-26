@@ -165,10 +165,35 @@ trade at prob 1.0/0.0 — no special-case code.
   (`strategies/ladder.py` does this heuristically).
 - **`mean_reversion`** (no deps) — fades a market toward an EMA of its own price.
   Simplest reference implementation.
+- **`ensemble`** (no LLM) — trades on ingested data. The **linker**
+  (`strategies/linker.py`) maps a market's question to source `entity` keys +
+  threshold/direction; the strategy converts each linked observation into
+  `P(quantity clears threshold)` (lognormal, tunable `sigma`) and combines them as
+  a weighted average. Single-source = restrict `entity_map` to one entity;
+  multi-source = leave the full map. Has a plausibility guard (`max_ratio`) and
+  exclusion keywords so it skips mis-linked markets instead of trading bogus
+  signals. Inspect coverage with `quantbots link`.
 - **`llm`** (`llm` extra, local model) — one call per measurable returns a
   percentile distribution; each strike is read off the interpolated CDF. The
   "make the bot smarter" move: reason about the *quantity*, not 30 yes/no
   questions.
+
+### Linking & market coverage (important)
+
+Trading on data hinges on **linking** a market to the right source `entity`. The
+current linker is deterministic keyword-matching — transparent, but coarse.
+Against the live market set it links **~0** markets, and that's correct: the
+platform's markets are deep fundamental/specialist questions (rare-earth balances
+in t REO, company revenue/leverage, niche indices like Cotlook A, sector macro),
+not broad "will gold exceed $X" price bets. Our three seed feeds don't cover them,
+so the linker abstains rather than emitting confident wrong estimates.
+
+To actually trade these, the next work is **(a)** domain-specific sources matching
+the markets' quantities (USGS/rare-earth, agricultural indices, company financials,
+FRED sector macro) and **(b)** semantic linking (local-LLM/embeddings) that can
+tell "Cerium balance" from "CNOOC revenue" and match units/dates. The pipeline
+itself — sources → observations → linker → ensemble → sizing → execution — is
+done and validated end-to-end.
 
 ---
 

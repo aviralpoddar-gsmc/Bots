@@ -16,6 +16,7 @@ from .base import Strategy
 _REGISTRY: dict[str, str] = {
     "mean_reversion": "quantbots.strategies.mean_reversion:MeanReversionStrategy",
     "surface_arb": "quantbots.strategies.surface_arb:SurfaceArbStrategy",
+    "ensemble": "quantbots.strategies.ensemble:EnsembleStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

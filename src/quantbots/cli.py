@@ -54,6 +54,28 @@ def sources() -> None:
 
 
 @app.command()
+def link(limit: int = typer.Option(15, help="Sample links to print")) -> None:
+    """Show which cached markets the linker maps to source entities (debug)."""
+    from .strategies.linker import link_markets
+
+    with Store() as store:
+        markets = store.load_open_markets()
+        links = link_markets(markets)
+    console.print(f"linked {len(links)} / {len(markets)} cached markets")
+    table = Table(show_lines=False)
+    for col in ("market", "entities", "thr", "dir"):
+        table.add_column(col)
+    for lk in list(links.values())[:limit]:
+        table.add_row(
+            lk.question[:50],
+            ", ".join(lk.entities),
+            "" if lk.threshold is None else f"{lk.threshold:g}",
+            lk.direction,
+        )
+    console.print(table)
+
+
+@app.command()
 def ingest(
     only: str = typer.Option("", "--only", help="Ingest just this one source"),
 ) -> None:

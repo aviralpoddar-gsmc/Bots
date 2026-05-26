@@ -29,6 +29,21 @@ bots:
       max_price_impact: 0.10
       min_order_mana: 5
 
+  # Fuses ingested observations (prices/macro) into a fair value, then trades the
+  # gap. Run `quantbots ingest` first so there's data to fuse.
+  - name: ensemble_1
+    strategy: ensemble
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 25
+      hold_band: 0.05
+    params:
+      sigma: 0.25          # assumed relative volatility over the horizon
+      source_weights:      # trust per source when averaging signals
+        stooq: 1.0
+        worldbank: 1.0
+
   # Local-LLM bot (requires the `llm` extra + a running local model).
   - name: llm_forecaster
     strategy: llm

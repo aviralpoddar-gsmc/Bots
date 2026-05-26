@@ -67,6 +67,8 @@ src/quantbots/
   strategies/surface_arb.py    # no-LLM example: fit a distribution to a strike ladder
   strategies/mean_reversion.py # no-LLM example: EMA mean reversion
   strategies/llm.py            # local-LLM example: percentile -> CDF
+  strategies/ensemble.py       # fuse ingested observations -> fair value (deterministic)
+  strategies/linker.py         # map market question -> source entity + threshold (heuristic)
   sources/base.py        # Source ABC: fetch() -> list[Observation] (external data)
   sources/{stooq,worldbank,rss}.py  # keyless feeds: prices / macro / news
   sources/ingest.py      # fetch configured sources -> observations cache

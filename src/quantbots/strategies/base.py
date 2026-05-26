@@ -26,6 +26,16 @@ class Strategy(ABC):
         #: Free-form strategy parameters from config/bots.yaml `params:`.
         self.params = params
 
+    def bind(self, observations: Any) -> None:
+        """Optional: give the strategy a read handle to ingested observations.
+
+        `observations` exposes `latest_observation(entity)` and
+        `load_observations(...)` (the Store satisfies this). The runner calls it
+        once before `estimate`. Strategies that trade on external data (e.g.
+        `ensemble`) keep the reference; market-only strategies ignore it.
+        """
+        return None
+
     @abstractmethod
     def estimate(self, group: list[Market]) -> dict[str, float]:
         """Return your fair-value probability for each market in `group`.

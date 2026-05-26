@@ -114,6 +114,7 @@ def run_bot(
         bot.name, bot.strategy, {"limits": bot.limits, "params": bot.params}, bot.enabled
     )
 
+    strategy.bind(store)  # give data-driven strategies a read handle to observations
     markets = strategy.prefilter(store.load_open_markets())
     positions = store.open_positions(bot_id)
     signals = _decide(bot, strategy, markets, positions)
