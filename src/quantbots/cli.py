@@ -9,6 +9,7 @@
     quantbots strategies             # list registered strategies
     quantbots sources                # list registered data sources
     quantbots llm-bench              # rank local LLMs against real ground truth
+    quantbots backtest               # measure a bot's calibration + PnL on history
 """
 
 from __future__ import annotations
@@ -181,6 +182,58 @@ def llm_bench(
     if scores and scores[0].valid:
         console.print(f"[green]Best:[/] {scores[0].model} "
                       f"(coverage {scores[0].coverage:.0%}, p50 err {scores[0].median_error:.3f})")
+
+
+# Backtest presets: a known historical series + the question the bot would face.
+_BACKTEST_PRESETS = {
+    "mortgage": {
+        "strategy": "ensemble", "entity": "FRED_MORTGAGE30US", "fred_id": "MORTGAGE30US",
+        "template": "Will the US 30-year fixed mortgage rate (Freddie Mac PMMS) exceed {T}%?",
+        "steps_per_year": 52,
+    },
+    "housing": {
+        "strategy": "ensemble", "entity": "FRED_HOUST1F", "fred_id": "HOUST1F",
+        "template": "Will US single-family housing starts SAAR exceed {T} thousand units?",
+        "steps_per_year": 12,
+    },
+}
+
+
+@app.command()
+def backtest(
+    preset: str = typer.Option("mortgage", help=f"One of {list(_BACKTEST_PRESETS)}"),
+    horizon_months: int = typer.Option(6, help="Forecast horizon to test"),
+) -> None:
+    """Measure a bot's calibration + simulated PnL on real historical data."""
+    from .backtest import backtest as run_backtest
+    from .config import load_bots
+    from .sources.fred import fetch_history
+    from .strategies import get_strategy
+
+    p = _BACKTEST_PRESETS[preset]
+    series = fetch_history(p["fred_id"])
+    console.print(f"[cyan]{preset}[/]: {len(series)} points {series[0][0]}..{series[-1][0]}")
+
+    # Use the configured params for that strategy if present.
+    params = next((b.params for b in load_bots() if b.strategy == p["strategy"]), {})
+    strat = get_strategy(p["strategy"], **params)
+    steps = max(1, round(p["steps_per_year"] * horizon_months / 12))
+
+    r = run_backtest(
+        strat, p["entity"], p["template"], series,
+        horizon_steps=steps, horizon_years=horizon_months / 12,
+    )
+    console.print(
+        f"n={r.n}  [bold]Brier={r.brier:.4f}[/] (baseline {r.baseline_brier:.4f}, "
+        f"skill {r.skill:+.1%})  win={r.win_rate:.1%}  "
+        f"ROI={r.roi:+.1%}  staked={r.total_staked:.0f}  profit={r.total_profit:+.0f}"
+    )
+    tbl = Table(title="Calibration (reliability)")
+    for c in ("predicted", "actual", "n"):
+        tbl.add_column(c, justify="right")
+    for mp, mo, cnt in r.reliability:
+        tbl.add_row(f"{mp:.2f}", f"{mo:.2f}", str(cnt))
+    console.print(tbl)
 
 
 @app.command()

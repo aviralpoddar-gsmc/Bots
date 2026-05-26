@@ -39,7 +39,10 @@ bots:
       max_order_size: 25
       hold_band: 0.05
     params:
-      annual_vol: 0.5      # annualized vol; scaled by sqrt(time-to-close) per market
+      annual_vol: 0.3      # global fallback; scaled by sqrt(time-to-close) per market
+      entity_vol:          # per-asset vols calibrated by `quantbots backtest`
+        FRED_MORTGAGE30US: 0.15   # backtested: Brier skill +41%, calib err 0.03
+        FRED_HOUST1F: 0.20        # backtested: skill +17%, calib err 0.03
       source_weights:      # trust per source when averaging signals
         stooq: 1.0
         fred: 1.0

@@ -93,8 +93,8 @@ def test_effective_sigma_grows_with_horizon():
     import time
     s = EnsembleStrategy(annual_vol=0.5, min_vol=0.01)
     yr = 365.25 * 24 * 3600 * 1000
-    near = s._effective_sigma({"closeTime": (time.time()) * 1000 + 0.25 * yr})
-    far = s._effective_sigma({"closeTime": (time.time()) * 1000 + 4 * yr})
+    near = s._effective_sigma({"closeTime": (time.time()) * 1000 + 0.25 * yr}, "X")
+    far = s._effective_sigma({"closeTime": (time.time()) * 1000 + 4 * yr}, "X")
     assert near < far
 
 

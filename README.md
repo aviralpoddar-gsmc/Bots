@@ -217,6 +217,30 @@ now a matter of adding sources + catalog entries.
 
 ---
 
+## Validate before deploying (`quantbots backtest`)
+
+A bot should prove it's **accurate** and **profitable** on history before it
+trades real mana. `quantbots backtest` replays a bot's probability model across
+decades of real data (e.g. FRED mortgage rate, weekly since 1971): for each date
+`t` and horizon `h` it forms the threshold questions the bot would face, takes the
+bot's estimate, and checks it against what *actually happened* at `t+h`. That gives
+thousands of (predicted probability, real outcome) pairs to score:
+
+- **Brier score** vs the 0.25 always-50% baseline (and a **skill** %)
+- **calibration** — do "70%" calls happen ~70% of the time? (reliability buckets)
+- **simulated PnL / ROI / win-rate** under the bot's real sizing
+
+```bash
+quantbots backtest --preset mortgage --horizon-months 6
+```
+
+This is also how parameters get **tuned**: sweeping the ensemble's volatility on
+mortgage data showed the default (0.5) was 3× too high (underconfident); 0.15 is
+near-perfectly calibrated (+41% Brier skill). Volatility is **per-asset**
+(`entity_vol` in config) — rates ~0.15, housing ~0.20, equities higher — each
+calibrated by its own backtest. **No bot should go live until it shows positive
+skill here.**
+
 ## Choosing a local model (`quantbots llm-bench`)
 
 "Which local model should the `llm` bot use?" is answered empirically, not by

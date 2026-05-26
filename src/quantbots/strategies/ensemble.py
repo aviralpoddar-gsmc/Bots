@@ -38,7 +38,8 @@ class EnsembleStrategy(Strategy):
 
     def __init__(
         self,
-        annual_vol: float = 0.5,
+        annual_vol: float = 0.3,
+        entity_vol: dict[str, float] | None = None,
         source_weights: dict[str, float] | None = None,
         entity_map: dict[str, list[str]] | None = None,
         max_ratio: float = 20.0,
@@ -46,12 +47,15 @@ class EnsembleStrategy(Strategy):
         **params: Any,
     ):
         super().__init__(
-            annual_vol=annual_vol, source_weights=source_weights, entity_map=entity_map,
-            max_ratio=max_ratio, min_vol=min_vol, **params,
+            annual_vol=annual_vol, entity_vol=entity_vol, source_weights=source_weights,
+            entity_map=entity_map, max_ratio=max_ratio, min_vol=min_vol, **params,
         )
-        # Volatility is horizon-scaled: effective sigma = annual_vol * sqrt(years
-        # to close), floored at min_vol so near-dated markets aren't priced at 0/1.
+        # Volatility is horizon-scaled: effective sigma = vol * sqrt(years to close),
+        # floored at min_vol. Volatility is PER-ASSET (rates ~0.15, equities ~0.6,
+        # commodities ~0.3) — backtest each entity to calibrate it. `entity_vol`
+        # overrides the global `annual_vol` default per entity.
         self.annual_vol = annual_vol
+        self.entity_vol = entity_vol or {}
         self.min_vol = min_vol
         self.source_weights = source_weights or {}
         self.entity_map = entity_map
@@ -65,13 +69,14 @@ class EnsembleStrategy(Strategy):
     def bind(self, observations: Any) -> None:
         self._obs = observations
 
-    def _effective_sigma(self, market: Market) -> float:
-        """annual_vol scaled by sqrt(years to close), floored at min_vol."""
+    def _effective_sigma(self, market: Market, entity: str) -> float:
+        """Per-entity annual vol scaled by sqrt(years to close), floored at min_vol."""
         close = market.get("closeTime")
         tau = 1.0
         if close:
             tau = (close / 1000.0 - time.time()) / (365.25 * 24 * 3600)
-        return max(self.annual_vol * math.sqrt(max(tau, 0.0)), self.min_vol)
+        vol = self.entity_vol.get(entity, self.annual_vol)
+        return max(vol * math.sqrt(max(tau, 0.0)), self.min_vol)
 
     def _signal_prob(
         self, value: float, threshold: float, direction: str, sigma: float
@@ -95,7 +100,6 @@ class EnsembleStrategy(Strategy):
             link = link_market(m, self.entity_map)
             if link is None or link.threshold is None:
                 continue
-            sigma = self._effective_sigma(m)
             probs: list[float] = []
             weights: list[float] = []
             for entity in link.entities:
@@ -108,6 +112,7 @@ class EnsembleStrategy(Strategy):
                     ratio = max(value / link.threshold, link.threshold / value)
                     if ratio > self.max_ratio:
                         continue
+                sigma = self._effective_sigma(m, entity)
                 p = self._signal_prob(value, link.threshold, link.direction, sigma)
                 if p is None:
                     continue
