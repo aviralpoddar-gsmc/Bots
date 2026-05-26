@@ -15,6 +15,7 @@ class FakeLLM:
 
 
 def _strat(pct, **kw):
+    kw.setdefault("conf_cap", 0.99)  # isolate CDF mechanics unless a test sets it
     s = LLMStrategy(**kw)
     s.llm = FakeLLM(pct)  # stub out the real local model
     return s
@@ -51,6 +52,23 @@ def test_direction_below_inverts():
     m = {"id": "a", "question": "Will X be below 60?", "threshold": 60, "direction": "below"}
     est = s.estimate([m])
     assert est["a"] < 0.2  # P(below 60) when 60 is p10
+
+
+def test_conf_cap_bounds_extreme_estimates():
+    # Strike far outside a tight band -> CDF ~0/1, but conf_cap must clamp it.
+    tight = {"p10": 99, "p25": 99.5, "p50": 100, "p75": 100.5, "p90": 101, "reasoning": "x"}
+    s = _strat(tight, spread_mult=1.0, conf_cap=0.75)
+    m = {"id": "a", "question": "Will X exceed 5?", "threshold": 5, "direction": "exceeds"}
+    est = s.estimate([m])["a"]
+    assert est == 0.75  # would be ~0.99 uncapped; clamped to the 0.75 ceiling
+
+
+def test_conf_cap_clamps_both_sides():
+    tight = {"p10": 99, "p25": 99.5, "p50": 100, "p75": 100.5, "p90": 101, "reasoning": "x"}
+    s = _strat(tight, spread_mult=1.0, conf_cap=0.75)
+    m = {"id": "a", "question": "Will X exceed 9999?", "threshold": 9999, "direction": "exceeds"}
+    est = s.estimate([m])["a"]
+    assert est == 0.25  # 1 - cap
 
 
 def test_max_groups_caps_calls():

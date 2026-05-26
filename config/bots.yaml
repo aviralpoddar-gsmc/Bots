@@ -81,4 +81,5 @@ bots:
     params:
       model: qwen3:32b    # benchmark winner: best calibration (71% coverage)
       spread_mult: 1.25   # less widening needed than 8b (32b is better calibrated)
+      conf_cap: 0.75      # never bet >75% conviction (obscure markets -> hallucination risk)
       max_groups: 12      # cap LLM calls per run (~50s each on 32b)

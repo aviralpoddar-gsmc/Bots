@@ -42,17 +42,24 @@ class LLMStrategy(Strategy):
         self,
         model: str | None = None,
         spread_mult: float = 1.5,
+        conf_cap: float = 0.80,
         max_groups: int = 20,
         **params: object,
     ):
-        super().__init__(model=model, spread_mult=spread_mult, max_groups=max_groups, **params)
+        super().__init__(model=model, spread_mult=spread_mult, conf_cap=conf_cap,
+                         max_groups=max_groups, **params)
         self.llm = LocalLLM(model=model)
-        # Local models are overconfident (benchmark: ~57% coverage vs ideal ~80%),
-        # so their p10-p90 bands are too narrow. Widen the percentile spread around
-        # the median by this factor before reading probabilities off the CDF.
+        # Local models are overconfident (benchmark: ~57-71% coverage vs ideal ~80%),
+        # so their p10-p90 bands are too narrow. Widen the percentile spread by this
+        # factor before reading probabilities off the CDF.
         self.spread_mult = spread_mult
-        # Bound LLM calls per run (each group = one call, ~10s); the run's budget
-        # cap then bounds spend among whatever this produces.
+        # Confidence cap: never let the bot express more conviction than this. On
+        # obscure markets outside the model's knowledge the CDF can hit 0.99/0.01
+        # (hallucinated certainty); clamping the final estimate to [1-cap, cap]
+        # bounds bet size so a hallucinated 99% can't become a max-size bet.
+        self.conf_cap = conf_cap
+        # Bound LLM calls per run (each group = one call); the run's budget cap then
+        # bounds spend among whatever this produces.
         self.max_groups = max_groups
 
     def prefilter(self, markets: list[Market]) -> list[Market]:
@@ -100,5 +107,6 @@ class LLMStrategy(Strategy):
                 continue
             cdf = norm_cdf((m["threshold"] - mu) / sigma)  # P(quantity <= strike)
             p = 1.0 - cdf if m.get("direction", "exceeds") == "exceeds" else cdf
-            out[m["id"]] = min(max(p, 0.01), 0.99)
+            # Clamp to the confidence cap so hallucinated certainty can't max-bet.
+            out[m["id"]] = min(max(p, 1.0 - self.conf_cap), self.conf_cap)
         return out
