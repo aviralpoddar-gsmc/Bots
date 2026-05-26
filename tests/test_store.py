@@ -50,3 +50,20 @@ def test_market_cache_roundtrip_and_snapshot(store):
     assert summary["open_positions"] == 1
     board = store.leaderboard()
     assert board and board[0]["name"] == "b1"
+
+
+def test_observations_roundtrip_and_dedup(store):
+    from quantbots.sources.base import Observation
+
+    store.upsert_observations([
+        Observation(source="stooq", entity="WTI_OIL", ts="2026-05-26T21:00:00", value=72.3),
+        Observation(source="stooq", entity="GOLD", ts="2026-05-26T21:00:00", value=2405.0),
+    ])
+    # Re-upserting the same (source, entity, ts) updates rather than duplicates.
+    store.upsert_observations([
+        Observation(source="stooq", entity="WTI_OIL", ts="2026-05-26T21:00:00", value=72.9),
+    ])
+    latest = store.latest_observation("WTI_OIL")
+    assert latest["value"] == 72.9
+    assert set(store.known_entities()) == {"WTI_OIL", "GOLD"}
+    assert len(store.load_observations(source="stooq")) == 2

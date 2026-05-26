@@ -67,6 +67,9 @@ src/quantbots/
   strategies/surface_arb.py    # no-LLM example: fit a distribution to a strike ladder
   strategies/mean_reversion.py # no-LLM example: EMA mean reversion
   strategies/llm.py            # local-LLM example: percentile -> CDF
+  sources/base.py        # Source ABC: fetch() -> list[Observation] (external data)
+  sources/{stooq,worldbank,rss}.py  # keyless feeds: prices / macro / news
+  sources/ingest.py      # fetch configured sources -> observations cache
   llm/client.py          # OpenAI-compatible client pointed at a LOCAL endpoint
   llm/health.py          # Ollama wedge probe + watchdog
   config.py              # env/secret + bots.yaml loading

@@ -18,6 +18,9 @@ from .sizing import DEFAULT_LIMITS
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = Path(os.environ.get("QUANTBOTS_CONFIG", _REPO_ROOT / "config" / "bots.yaml"))
+DEFAULT_SOURCES_CONFIG = Path(
+    os.environ.get("QUANTBOTS_SOURCES_CONFIG", _REPO_ROOT / "config" / "sources.yaml")
+)
 
 
 @dataclass
@@ -63,3 +66,22 @@ def load_bot(name: str, path: Path | str = DEFAULT_CONFIG) -> BotConfig:
         if bot.name == name:
             return bot
     raise KeyError(f"No bot named {name!r} in {path}")
+
+
+@dataclass
+class SourceConfig:
+    name: str
+    enabled: bool = True
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+def load_sources(path: Path | str = DEFAULT_SOURCES_CONFIG) -> list[SourceConfig]:
+    data = yaml.safe_load(Path(path).read_text()) or {}
+    return [
+        SourceConfig(
+            name=entry["name"],
+            enabled=entry.get("enabled", True),
+            params=entry.get("params", {}),
+        )
+        for entry in data.get("sources", [])
+    ]

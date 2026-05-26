@@ -60,6 +60,7 @@ When `health` prints your username + balance, auth works.
 
 ```bash
 quantbots refresh                      # pull markets into the local SQLite cache
+quantbots ingest                       # pull external data sources into the cache
 quantbots run --bot surface_arb_1      # DRY-RUN: prints intended orders, no mana moved
 quantbots run --bot surface_arb_1 --live   # actually trade
 quantbots resolve --bot surface_arb_1  # close out any resolved positions
@@ -67,6 +68,28 @@ quantbots snapshot                     # roll up PnL + print the leaderboard
 ```
 
 `run` defaults to dry-run. Always dry-run a new bot first and eyeball the signals.
+
+## Data sources (information bots trade on)
+
+Bots trade on *information*: external feeds are ingested into the store's
+`observations` table, and strategies read them to form a fair-value view of a
+market. Sources mirror the strategy pattern — small independent modules under
+`sources/`, listed by `quantbots sources`, configured in `config/sources.yaml`,
+fetched by `quantbots ingest`.
+
+Built-in (keyless): `stooq` (commodity/FX/index prices), `worldbank` (macro:
+CPI, GDP, unemployment), `rss` (news headlines). To add one: implement a
+`Source` subclass (`fetch() -> list[Observation]`), register it in
+`sources/__init__.py`, and add it to `config/sources.yaml`.
+
+An **Observation** is the normalized unit — `value` for numbers, `text` for news,
+keyed by `entity` (the canonical thing observed, e.g. `WTI_OIL`, `US_CPI_YOY`) so
+different feeds can describe the same quantity. Run `ingest` on its own schedule
+(cron / `quantbots`-in-a-loop), independent of trading.
+
+> Note: a data-source *API key* (FRED, a news API) is fine — that's data, not
+> hosted inference. The local-compute-only rule applies to the *model/reasoning*
+> step, not to pulling data.
 
 ---
 

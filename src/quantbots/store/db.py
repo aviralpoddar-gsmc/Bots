@@ -136,6 +136,55 @@ class Store:
         ).fetchone()
         return json.loads(row["raw_json"]) if row else None
 
+    # --- observations (ingested external data) ---------------------------
+
+    def upsert_observations(self, observations: list) -> int:
+        """Insert/replace observations. Accepts Observation dataclasses or dicts."""
+        rows = []
+        for o in observations:
+            d = o.as_row() if hasattr(o, "as_row") else o
+            rows.append(
+                (
+                    d["source"], d["entity"], d["ts"], d.get("value"),
+                    d.get("text"), json.dumps(d.get("payload") or {}), _now(),
+                )
+            )
+        if not rows:
+            return 0
+        self.conn.executemany(
+            """
+            INSERT INTO observations (source, entity, ts, value, text, payload, ingested_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source, entity, ts) DO UPDATE SET
+                value=excluded.value, text=excluded.text,
+                payload=excluded.payload, ingested_at=excluded.ingested_at
+            """,
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def load_observations(self, entity: str | None = None, source: str | None = None,
+                          since: str | None = None, limit: int = 1000) -> list[dict]:
+        q = "SELECT * FROM observations WHERE 1=1"
+        params: list[Any] = []
+        if entity:
+            q += " AND entity = ?"; params.append(entity)
+        if source:
+            q += " AND source = ?"; params.append(source)
+        if since:
+            q += " AND ts >= ?"; params.append(since)
+        q += " ORDER BY ts DESC LIMIT ?"; params.append(limit)
+        return [dict(r) for r in self.conn.execute(q, params).fetchall()]
+
+    def latest_observation(self, entity: str, source: str | None = None) -> dict | None:
+        rows = self.load_observations(entity=entity, source=source, limit=1)
+        return rows[0] if rows else None
+
+    def known_entities(self) -> list[str]:
+        rows = self.conn.execute("SELECT DISTINCT entity FROM observations").fetchall()
+        return [r["entity"] for r in rows]
+
     # --- pnl (delegates to pnl.py) ---------------------------------------
 
     def current_prob(self, market_id: str) -> float | None:

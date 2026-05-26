@@ -1,0 +1,35 @@
+# External data sources to ingest. `quantbots ingest` fetches each enabled
+# source and caches the observations in the store for strategies to read.
+#
+# - name:    a source registered in quantbots/sources/__init__.py REGISTRY
+# - params:  passed as **kwargs to the Source constructor
+
+sources:
+  # Commodities / FX / indices (keyless).
+  - name: stooq
+    enabled: true
+    params:
+      symbols:
+        WTI_OIL: cl.f
+        BRENT_OIL: cb.f
+        GOLD: gc.f
+        SILVER: si.f
+        COPPER: hg.f
+        NATGAS: ng.f
+
+  # Macro / economic indicators (keyless).
+  - name: worldbank
+    enabled: true
+    params:
+      indicators:
+        - { entity: US_CPI_YOY, country: US, code: FP.CPI.TOTL.ZG }
+        - { entity: US_GDP_GROWTH, country: US, code: NY.GDP.MKTP.KD.ZG }
+        - { entity: US_UNEMPLOYMENT, country: US, code: SL.UEM.TOTL.ZS }
+
+  # News / text feeds (keyless). Add commodity/macro RSS feeds here.
+  - name: rss
+    enabled: true
+    params:
+      max_items: 30
+      feeds:
+        - { entity: EIA_TODAY_IN_ENERGY, url: "https://www.eia.gov/rss/todayinenergy.xml" }

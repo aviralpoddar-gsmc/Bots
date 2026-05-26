@@ -2,10 +2,12 @@
 
     quantbots health                 # prove API key + Cloudflare Access work
     quantbots refresh                # pull markets into the local cache
+    quantbots ingest                 # fetch external data sources into the cache
     quantbots run --bot NAME         # dry-run a bot (default); add --live to trade
     quantbots resolve --bot NAME     # close out resolved positions
     quantbots snapshot               # roll up PnL + print leaderboard
     quantbots strategies             # list registered strategies
+    quantbots sources                # list registered data sources
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ from rich.table import Table
 from .config import load_bot, load_bots
 from .manifold.client import ManifoldClient
 from .runner import run_bot, sync_resolutions
+from .sources import available as available_sources
+from .sources.ingest import ingest as run_ingest
 from .store.db import Store
 from .strategies import available, get_strategy
 
@@ -40,6 +44,28 @@ def strategies() -> None:
     """List registered strategies."""
     for name in available():
         console.print(f"• {name}")
+
+
+@app.command()
+def sources() -> None:
+    """List registered data sources."""
+    for name in available_sources():
+        console.print(f"• {name}")
+
+
+@app.command()
+def ingest(
+    only: str = typer.Option("", "--only", help="Ingest just this one source"),
+) -> None:
+    """Fetch configured external data sources into the observations cache."""
+    with Store() as store:
+        result = run_ingest(store, only=only or None)
+        entities = len(store.known_entities())
+    for name, n in result.by_source.items():
+        console.print(f"[green]{name}[/]: {n} observations")
+    for name, err in result.errors.items():
+        console.print(f"[red]{name} failed[/]: {err}")
+    console.print(f"total {result.total} observations across {entities} entities")
 
 
 @app.command()

@@ -60,3 +60,19 @@ CREATE TABLE IF NOT EXISTS market_cache (
     updated_at        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_market_resolved ON market_cache(is_resolved);
+
+-- Ingested external data. Append-ish: dedup on (source, entity, ts). A numeric
+-- observation sets `value`; a text one (news headline) sets `text`. `entity` is
+-- the canonical key for the observed quantity (e.g. "WTI_OIL", "US_CPI_YOY").
+CREATE TABLE IF NOT EXISTS observations (
+    source      TEXT NOT NULL,
+    entity      TEXT NOT NULL,
+    ts          TEXT NOT NULL,     -- ISO-8601 of the observation time
+    value       REAL,
+    text        TEXT,
+    payload     TEXT,              -- JSON of the raw record
+    ingested_at TEXT NOT NULL,
+    PRIMARY KEY (source, entity, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_obs_entity ON observations(entity, ts);
+CREATE INDEX IF NOT EXISTS idx_obs_source ON observations(source, ts);
