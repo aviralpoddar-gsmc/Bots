@@ -79,6 +79,6 @@ bots:
       hold_band: 0.05
       max_run_budget: 150
     params:
-      model: qwen3:8b
-      spread_mult: 1.5    # widen overconfident model bands before pricing
-      max_groups: 20      # cap LLM calls per run (~10s each)
+      model: qwen3:32b    # benchmark winner: best calibration (71% coverage)
+      spread_mult: 1.25   # less widening needed than 8b (32b is better calibrated)
+      max_groups: 12      # cap LLM calls per run (~50s each on 32b)

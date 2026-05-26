@@ -16,8 +16,9 @@ import os
 # Default to local Ollama. QUANTBOTS_LLM_BASE_URL may override to another LOCAL
 # host (e.g. a Mac Studio on the LAN) or a local LiteLLM proxy.
 DEFAULT_BASE_URL = os.environ.get("QUANTBOTS_LLM_BASE_URL", "http://localhost:11434/v1")
-# qwen3:8b won our local forecasting benchmark (best calibration + accuracy).
-DEFAULT_MODEL = os.environ.get("QUANTBOTS_LLM_MODEL", "qwen3:8b")
+# qwen3:32b won our local forecasting benchmark (best calibration: 71% coverage
+# vs ideal ~80%; comparable accuracy to 8b). ~50s/call on M3 Ultra.
+DEFAULT_MODEL = os.environ.get("QUANTBOTS_LLM_MODEL", "qwen3:32b")
 
 # Ollama's context window defaults to 2048 and SILENTLY truncates, which breaks
 # JSON mode (you get empty/partial JSON). Always set this high.
