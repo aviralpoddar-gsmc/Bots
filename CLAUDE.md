@@ -76,6 +76,7 @@ src/quantbots/
   sources/ingest.py      # fetch configured sources -> observations cache
   llm/client.py          # OpenAI-compatible client pointed at a LOCAL endpoint
   llm/health.py          # Ollama wedge probe + watchdog
+  llm/bench.py           # rank local LLMs vs real data ground truth (`quantbots llm-bench`)
   config.py              # env/secret + bots.yaml loading
   cli.py                 # `quantbots` entry point
 config/bots.yaml         # per-bot: strategy, limits, account env var

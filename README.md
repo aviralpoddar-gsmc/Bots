@@ -217,6 +217,28 @@ now a matter of adding sources + catalog entries.
 
 ---
 
+## Choosing a local model (`quantbots llm-bench`)
+
+"Which local model should the `llm` bot use?" is answered empirically, not by
+vibes. `quantbots llm-bench` asks each candidate model for a percentile
+distribution of quantities we **already know the true value of** (from the
+observations cache — mortgage rate, cotton, ONI, gold, oil, ...), then scores:
+
+- **validity** — fraction returning parseable, monotonic percentiles
+- **coverage** — fraction where the true value lands in the model's p10–p90
+  (calibration; well-calibrated ≈ 80%)
+- **p50 error** — median point accuracy
+- **latency** — avg seconds per forecast
+
+```bash
+quantbots ingest                 # get ground-truth values first
+quantbots llm-bench --models qwen3:8b,gemma3:latest,gemma4:latest
+```
+
+Fully local and reproducible. The `llm` bot's edge is the **long tail** the
+deterministic bots can't link (no data feed) — it reasons about the underlying
+quantity, returns a percentile distribution, and reads each strike off the CDF.
+
 ## Local LLM hosts (gotchas)
 
 - Set `num_ctx=32768` — Ollama defaults to 2048 and **silently truncates**,

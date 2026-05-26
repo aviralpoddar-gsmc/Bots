@@ -8,6 +8,7 @@
     quantbots snapshot               # roll up PnL + print leaderboard
     quantbots strategies             # list registered strategies
     quantbots sources                # list registered data sources
+    quantbots llm-bench              # rank local LLMs against real ground truth
 """
 
 from __future__ import annotations
@@ -141,6 +142,45 @@ def run(
         console.print(f"[green]placed[/] {result.orders_placed} orders, {len(result.errors)} errors")
     for e in result.errors[:10]:
         console.print(f"  [red]err[/] {e}")
+
+
+@app.command(name="llm-bench")
+def llm_bench(
+    models: str = typer.Option(
+        "qwen3:8b,gemma3:latest,gemma4:latest", "--models",
+        help="Comma-separated local model names to compare",
+    ),
+    asof: str = typer.Option("", "--asof", help="Date context for forecasts (default: today)"),
+) -> None:
+    """Rank local LLMs as forecasters, scored against our real data feeds.
+
+    Run `quantbots ingest` first so there are ground-truth values to score against.
+    """
+    from datetime import UTC, datetime
+
+    from .llm.bench import benchmark
+
+    asof = asof or datetime.now(UTC).strftime("%B %Y")
+    model_list = [m.strip() for m in models.split(",") if m.strip()]
+    console.print(f"Benchmarking {model_list} as of [cyan]{asof}[/]")
+    with Store() as store:
+        scores = benchmark(model_list, asof, store=store)
+
+    table = Table(title="Local LLM forecasting benchmark")
+    for col in ("model", "valid", "coverage", "p50 err", "latency"):
+        table.add_column(col, justify="right" if col != "model" else "left")
+    for s in scores:
+        table.add_row(
+            s.model,
+            f"{s.valid}/{s.n}",
+            f"{s.coverage:.0%}",
+            f"{s.median_error:.3f}",
+            f"{s.avg_latency:.1f}s",
+        )
+    console.print(table)
+    if scores and scores[0].valid:
+        console.print(f"[green]Best:[/] {scores[0].model} "
+                      f"(coverage {scores[0].coverage:.0%}, p50 err {scores[0].median_error:.3f})")
 
 
 @app.command()
