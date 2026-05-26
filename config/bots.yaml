@@ -45,6 +45,28 @@ bots:
         fred: 1.0
         worldbank: 1.0
 
+  # Climate bot — ENSO / Oceanic Niño Index (NOAA). Gaussian persistence model.
+  - name: enso_1
+    strategy: enso
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 25
+      hold_band: 0.05
+    params:
+      monthly_vol: 0.25   # ONI per-month change vol; scaled by sqrt(months-to-close)
+
+  # Soft-commodities bot — ICE/CBOT ag futures prices (Stooq). Lognormal model.
+  - name: commodity_1
+    strategy: commodity_futures
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 25
+      hold_band: 0.05
+    params:
+      annual_vol: 0.30    # soft-commodity annualized vol; scaled by sqrt(years-to-close)
+
   # Local-LLM bot (requires the `llm` extra + a running local model).
   - name: llm_forecaster
     strategy: llm

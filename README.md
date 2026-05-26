@@ -77,8 +77,9 @@ market. Sources mirror the strategy pattern — small independent modules under
 `sources/`, listed by `quantbots sources`, configured in `config/sources.yaml`,
 fetched by `quantbots ingest`.
 
-Built-in (keyless): `stooq` (commodity/FX/index prices + equities), `fred` (US
-macro series via the public CSV — mortgage rate, housing starts, ...), `worldbank`
+Built-in (keyless): `stooq` (commodity/FX/index prices + equities + soft-commodity
+futures), `fred` (US macro series via the public CSV — mortgage rate, housing
+starts, ...), `noaa` (climate indices — ENSO/Oceanic Niño Index), `worldbank`
 (global macro: CPI, GDP, unemployment), `rss` (news headlines). To add one:
 implement a `Source` subclass (`fetch() -> list[Observation]`), register it in
 `sources/__init__.py`, and add it to `config/sources.yaml`.
@@ -174,10 +175,20 @@ trade at prob 1.0/0.0 — no special-case code.
   multi-source = leave the full map. Has a plausibility guard (`max_ratio`) and
   exclusion keywords so it skips mis-linked markets instead of trading bogus
   signals. Inspect coverage with `quantbots link`.
+- **`enso`** (no LLM) — climate bot on ENSO/Oceanic Niño Index markets, fed by
+  `noaa`. Uses a **Gaussian persistence** model (additive, handles negative
+  values) — a different model from `ensemble`'s lognormal, because the ONI isn't
+  a positive price. Self-contained linking (only ONI markets).
+- **`commodity_futures`** (no LLM) — soft-commodities bot on ICE/CBOT ag-futures
+  price markets (cotton, sugar, wheat, corn, cocoa), fed by `stooq`. Lognormal
+  price-threshold model with its own catalog; self-contained.
 - **`llm`** (`llm` extra, local model) — one call per measurable returns a
   percentile distribution; each strike is read off the interpolated CDF. The
   "make the bot smarter" move: reason about the *quantity*, not 30 yes/no
   questions.
+
+Each data-driven bot does its **own** linking and only acts on its domain's
+markets, so multiple bots can run side by side without stepping on each other.
 
 ### Linking & market coverage
 

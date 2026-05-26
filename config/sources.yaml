@@ -19,6 +19,12 @@ sources:
         COPPER: hg.f
         NATGAS: ng.f
         STOCK_WULF: wulf.us
+        # Soft-commodity futures (for the commodity_futures bot).
+        CME_COTTON: ct.f
+        CME_SUGAR: sb.f
+        CME_CORN: zc.f
+        CME_WHEAT: zw.f
+        CME_COCOA: cc.f
 
   # US macro series (keyless FRED CSV). entity FRED_<SERIESID>.
   - name: fred
@@ -27,6 +33,11 @@ sources:
       series:
         - { entity: FRED_MORTGAGE30US, id: MORTGAGE30US }
         - { entity: FRED_HOUST1F, id: HOUST1F }
+
+  # Climate indices — ENSO / Oceanic Niño Index (keyless NOAA CPC ascii).
+  - name: noaa
+    enabled: true
+    params: {}
 
   # Macro / economic indicators (keyless).
   - name: worldbank

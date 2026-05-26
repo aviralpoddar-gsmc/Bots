@@ -97,7 +97,19 @@ def refresh(
 ) -> None:
     """Pull markets from the clone into the local cache for the runner to read."""
     client = _client()
-    markets = client.search_markets(search, limit=limit) if search else client.list_markets(limit=limit)
+    if search:
+        markets = client.search_markets(search, limit=limit)
+    else:
+        # Paginate (the API caps a page at 1000) until we hit `limit` or run out.
+        markets, before = [], None
+        while len(markets) < limit:
+            page = client.list_markets(limit=min(1000, limit - len(markets)), before=before)
+            if not page:
+                break
+            markets += page
+            before = page[-1]["id"]
+            if len(page) < 1000:
+                break
     with Store() as store:
         n = store.upsert_markets(markets)
     console.print(f"[green]Cached[/] {n} markets")

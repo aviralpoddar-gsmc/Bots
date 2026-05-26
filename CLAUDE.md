@@ -68,9 +68,11 @@ src/quantbots/
   strategies/mean_reversion.py # no-LLM example: EMA mean reversion
   strategies/llm.py            # local-LLM example: percentile -> CDF
   strategies/ensemble.py       # fuse ingested observations -> fair value (deterministic)
+  strategies/enso.py           # climate bot: ENSO/ONI markets, Gaussian persistence
+  strategies/commodity_futures.py  # soft-commodity futures price markets, lognormal
   strategies/linker.py         # map market question -> source entity + threshold (heuristic)
   sources/base.py        # Source ABC: fetch() -> list[Observation] (external data)
-  sources/{stooq,fred,worldbank,rss}.py  # keyless feeds: prices+equities / US macro / global macro / news
+  sources/{stooq,fred,noaa,worldbank,rss}.py  # keyless feeds: prices+equities+softs / US macro / climate / global macro / news
   sources/ingest.py      # fetch configured sources -> observations cache
   llm/client.py          # OpenAI-compatible client pointed at a LOCAL endpoint
   llm/health.py          # Ollama wedge probe + watchdog

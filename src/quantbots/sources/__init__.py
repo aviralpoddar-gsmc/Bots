@@ -15,6 +15,7 @@ _REGISTRY: dict[str, str] = {
     "stooq": "quantbots.sources.stooq:StooqSource",        # commodities / FX / indices / equities
     "worldbank": "quantbots.sources.worldbank:WorldBankSource",  # macro / econ (global, annual)
     "fred": "quantbots.sources.fred:FredSource",           # US macro series (keyless CSV)
+    "noaa": "quantbots.sources.noaa:NoaaSource",           # climate indices (ENSO/ONI)
     "rss": "quantbots.sources.rss:RSSSource",              # news / text
 }
 

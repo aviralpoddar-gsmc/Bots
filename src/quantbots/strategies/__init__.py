@@ -17,6 +17,8 @@ _REGISTRY: dict[str, str] = {
     "mean_reversion": "quantbots.strategies.mean_reversion:MeanReversionStrategy",
     "surface_arb": "quantbots.strategies.surface_arb:SurfaceArbStrategy",
     "ensemble": "quantbots.strategies.ensemble:EnsembleStrategy",
+    "enso": "quantbots.strategies.enso:EnsoStrategy",
+    "commodity_futures": "quantbots.strategies.commodity_futures:CommodityFuturesStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

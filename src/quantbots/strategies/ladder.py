@@ -15,8 +15,8 @@ from typing import Any
 
 Market = dict[str, Any]
 
-# "$62", "62.5", "1,200" — first numeric token after a comparison word.
-_NUM = r"\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)"
+# "$62", "62.5", "1,200", "-0.5" — first numeric token after a comparison word.
+_NUM = r"(-?\s*\$?\s*[0-9][0-9,]*(?:\.[0-9]+)?)"
 _EXCEEDS = re.compile(rf"(?:exceed|above|over|greater than|more than|at least|>=|>)\s*{_NUM}", re.I)
 _BELOW = re.compile(rf"(?:below|under|less than|at most|<=|<)\s*{_NUM}", re.I)
 _PUNCT = re.compile(r"[^\w\s]")
@@ -24,7 +24,7 @@ _WS = re.compile(r"\s+")
 
 
 def _to_float(token: str) -> float:
-    return float(token.replace(",", ""))
+    return float(token.replace(",", "").replace("$", "").replace(" ", ""))
 
 
 def parse_threshold(question: str) -> tuple[float, str] | None:
