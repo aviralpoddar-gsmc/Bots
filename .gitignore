@@ -11,8 +11,6 @@ __pycache__/
 
 data/*.sqlite
 data/*.db
-reports/*.json
-reports/*.txt
 
 .DS_Store
 *.egg-info/

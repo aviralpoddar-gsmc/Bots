@@ -1,0 +1,38 @@
+# Per-bot configuration. The framework reads this; bot authors edit it.
+#
+# - strategy:    a name registered in quantbots/strategies/__init__.py REGISTRY
+# - account_env: env var holding THIS bot's Manifold-clone API key (never the key
+#                itself). Defaults to MANIFOLD_CLONE_API_KEY.
+# - limits:      sizing caps; anything omitted falls back to sizing.DEFAULT_LIMITS
+# - params:      passed as **kwargs to the Strategy constructor
+
+bots:
+  - name: mean_reverter
+    strategy: mean_reversion
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 25
+      liquidity_pct: 0.25
+      hold_band: 0.05
+    params:
+      alpha: 0.2
+
+  - name: surface_arb_1
+    strategy: surface_arb
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.33
+      hold_band: 0.05
+      max_price_impact: 0.10
+      min_order_mana: 5
+
+  # Local-LLM bot (requires the `llm` extra + a running local model).
+  - name: llm_forecaster
+    strategy: llm
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: false
+    params:
+      model: gemma2
