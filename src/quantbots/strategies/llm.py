@@ -2,8 +2,13 @@
 
 The trick (ported from TAL's thesis_response): don't ask the model to price each
 strike. Ask it *once* per measurable for a percentile distribution of the
-underlying quantity, then read every strike off the interpolated CDF. One call
-prices a whole ladder with cross-strike consistency for free.
+underlying quantity, then read every strike off the CDF. One call prices a whole
+ladder with cross-strike consistency for free.
+
+We fit a normal to the returned percentiles and use its analytic CDF (smooth
+tails, no clamping), with `spread_mult` inflating sigma to correct the
+overconfidence local models show (benchmark: ~57-71% p10-p90 coverage vs ideal
+~80%). Without this, strikes outside p10-p90 collapse to near-binary 0.10/0.90.
 
 Uses `quantbots.llm.client`, which talks to a LOCAL OpenAI-compatible endpoint
 (Ollama / LiteLLM -> local). No hosted inference. Requires the `llm` extra.
@@ -13,14 +18,15 @@ from __future__ import annotations
 
 import json
 
-import numpy as np
-
+from ._model import norm_cdf
 from ..llm.client import LocalLLM
 from .base import Market, Strategy
 from .ladder import attach_ladder_fields, measurable_key
 
-_LEVELS = [0.10, 0.25, 0.50, 0.75, 0.90]
 _KEYS = ["p10", "p25", "p50", "p75", "p90"]
+# z-scores of the 10/90 and 25/75 percentile pairs of a standard normal.
+_Z_10_90 = 2.5631  # p90 - p10 span in sigmas
+_Z_25_75 = 1.3490  # p75 - p25 span in sigmas (IQR)
 
 _SYSTEM = (
     "You are a calibrated forecaster. Given a quantity to predict, return ONLY a "
@@ -80,16 +86,19 @@ class LLMStrategy(Strategy):
         pct = self._ask_percentiles(group)
         if pct is None:
             return {}
-        values = sorted(float(pct[k]) for k in _KEYS)
-        # Widen the band around the median to counter model overconfidence.
-        median = values[2]
-        values = [median + self.spread_mult * (v - median) for v in values]
+        p10, p25, p50, p75, p90 = sorted(float(pct[k]) for k in _KEYS)
+        # Fit a normal: mu = median; sigma from both the 10-90 span and the IQR
+        # (averaged for robustness), then inflated by spread_mult to counter the
+        # model's overconfidence.
+        mu = p50
+        sigma_raw = 0.5 * ((p90 - p10) / _Z_10_90 + (p75 - p25) / _Z_25_75)
+        sigma = max(sigma_raw, 1e-9) * self.spread_mult
+
         out: dict[str, float] = {}
         for m in group:
             if m.get("threshold") is None:
                 continue
-            # CDF at the strike, interpolated across the percentile points.
-            cdf = float(np.interp(m["threshold"], values, _LEVELS))
+            cdf = norm_cdf((m["threshold"] - mu) / sigma)  # P(quantity <= strike)
             p = 1.0 - cdf if m.get("direction", "exceeds") == "exceeds" else cdf
-            out[m["id"]] = float(np.clip(p, 0.01, 0.99))
+            out[m["id"]] = min(max(p, 0.01), 0.99)
         return out
