@@ -12,6 +12,7 @@ narrow the market universe and decide which markets are evaluated together.
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -49,9 +50,15 @@ class Strategy(ABC):
     def prefilter(self, markets: list[Market]) -> list[Market]:
         """Narrow the universe before evaluation. Default: keep open, liquid,
         not-about-to-close markets. Override to add strategy-specific filters."""
+        now_ms = time.time() * 1000
         out = []
         for m in markets:
             if m.get("isResolved"):
+                continue
+            # Closed-but-unresolved markets reject bets (403). closeTime is epoch ms;
+            # None/0 means no close set, treat as open.
+            close = m.get("closeTime")
+            if close and close <= now_ms:
                 continue
             if (m.get("totalLiquidity") or 0) < self.params.get("min_liquidity", 50):
                 continue
@@ -62,3 +69,12 @@ class Strategy(ABC):
         """Partition markets into groups evaluated together by `estimate`.
         Default: each market is its own group (single-market strategies)."""
         return [[m] for m in markets]
+
+    def correlation_key(self, market: Market) -> str:
+        """Key identifying which markets share an underlying risk, used by the
+        portfolio allocator to cap concentration in correlated bets.
+
+        Default: the market id (every market independent — no grouping). Override
+        to return e.g. the underlying entity so all strikes/dates of one quantity
+        ("gold price") count against a single per-group budget."""
+        return str(market.get("id"))
