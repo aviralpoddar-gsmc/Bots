@@ -18,6 +18,10 @@ sources:
         SILVER: si.f
         COPPER: hg.f
         NATGAS: ng.f
+        # commodity_spot bot (verified units): platinum/palladium $/oz, RBOB $/gal.
+        PLATINUM: pl.f
+        PALLADIUM: pa.f
+        GASOLINE: rb.f
         STOCK_WULF: wulf.us
         # Soft-commodity futures (for the commodity_futures bot).
         CME_COTTON: ct.f

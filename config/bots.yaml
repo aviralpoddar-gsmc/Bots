@@ -70,6 +70,95 @@ bots:
     params:
       annual_vol: 0.30    # soft-commodity annualized vol; scaled by sqrt(years-to-close)
 
+  # Data-anchored spot-price bot: gold/silver/copper/WTI/Brent threshold ladders.
+  # Strict matcher + per-commodity unit conversion (see commodity_spot.py). Backtested
+  # on FRED daily history: Brier skill +0.10..+0.29, win 77-84%, simulated ROI +57..71%.
+  - name: commodity_spot_1
+    strategy: commodity_spot
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      # Size to liquidity and only NUDGE prices — scale comes from breadth (many
+      # markets), not from slamming any one market. Repeated runs converge a
+      # mispriced market toward fair value a few points at a time.
+      max_order_size: 100     # per-market hard ceiling
+      liquidity_pct: 0.25      # primary size driver: take at most 1/4 of a market's liquidity
+      max_price_impact: 0.05   # never move a single market's price more than 5 points per run
+      hold_band: 0.05
+      max_run_budget: 50000    # generous; lets liquidity/impact caps govern size, not the budget
+      per_group_pct: 0.30      # no single commodity gets >30% of the book (correlation cap)
+      min_ev: 0.05             # only fund orders with >5% expected profit per mana
+      dry_run_sample: 25       # how many orders to validate in dry-run
+      # Across-run exposure ceilings — bound CUMULATIVE position over repeated live
+      # runs (balance ~Ṁ360k). Stops the bot deploying unbounded capital into a
+      # stubborn market that other traders keep pushing back.
+      max_total_exposure: 18000   # ~5% of balance across all commodity_spot positions
+      max_group_exposure: 5000    # ~1.4% of balance in any one commodity
+    params:
+      min_vol: 0.05
+      vols:                 # realized annual vols (FRED daily); scaled by sqrt(years-to-close)
+        GOLD: 0.16
+        SILVER: 0.30
+        PLATINUM: 0.22
+        PALLADIUM: 0.30
+        COPPER: 0.21        # backtested-family model; copper feed is cents/lb -> $/MT
+        WTI_OIL: 0.40
+        BRENT_OIL: 0.39
+        GASOLINE: 0.45
+
+  # Structural arbitrage: model-free monotonicity coherence across ALL numeric
+  # ladders (domain-agnostic — production, demand, price, spread, ...). Trades the
+  # ~2k ladders with provable monotonicity violations toward an isotonic-fit fair
+  # value. Gentle, liquidity-aware sizing; per-ladder concentration caps.
+  - name: ladder_arb_1
+    strategy: ladder_arb
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.25      # size to liquidity; nudge, don't slam
+      max_price_impact: 0.05
+      hold_band: 0.05
+      max_run_budget: 50000    # generous; liquidity/impact caps govern per-order size
+      per_group_pct: 0.05      # no single ladder gets >5% of the book (many ladders)
+      min_ev: 0.05             # gates on REALIZED EV (paper EV x resolvability)
+      min_resolvability: 0.04  # skip production/demand ladders that ~never resolve YES/NO
+      dry_run_sample: 25
+      max_total_exposure: 18000   # ~5% of balance across all ladder_arb positions
+      max_group_exposure: 1000    # cap per individual ladder
+    params:
+      dev_band: 0.03           # treat |prob-0.5|>this (or any volume) as informative
+      informative_weight: 5.0
+      min_strikes: 3
+
+  # Term-structure (time) coherence: same metric+threshold across resolution dates
+  # must trace a smooth curve in time. Pulls stale 0.50 dates toward the value their
+  # traded time-neighbours imply (kernel smoother, informative-weighted). Orthogonal
+  # axis to ladder_arb (which works across thresholds on one date).
+  - name: term_structure_1
+    strategy: term_structure
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: true
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.05
+      max_run_budget: 50000
+      per_group_pct: 0.05       # no single term-structure curve gets >5% of the book
+      min_ev: 0.05              # gates on REALIZED EV (paper EV x resolvability)
+      min_resolvability: 0.04   # skip production/demand curves that ~never resolve YES/NO
+      dry_run_sample: 25
+      max_total_exposure: 18000   # ~5% of balance
+      max_group_exposure: 1000    # cap per metric+threshold curve
+    params:
+      bandwidth: 6.0            # months; Gaussian kernel width over resolution dates
+      dev_band: 0.03
+      informative_weight: 5.0
+      min_dates: 3
+      min_anchors: 2
+      skip_extreme: 0.02
+
   # Local-LLM bot (requires the `llm` extra + a running local model).
   # Trades the long tail the deterministic bots can't link, by reasoning about the
   # underlying quantity. qwen3:8b won the local forecasting benchmark.

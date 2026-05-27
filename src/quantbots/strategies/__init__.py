@@ -19,6 +19,9 @@ _REGISTRY: dict[str, str] = {
     "ensemble": "quantbots.strategies.ensemble:EnsembleStrategy",
     "enso": "quantbots.strategies.enso:EnsoStrategy",
     "commodity_futures": "quantbots.strategies.commodity_futures:CommodityFuturesStrategy",
+    "commodity_spot": "quantbots.strategies.commodity_spot:CommoditySpotStrategy",
+    "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
+    "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

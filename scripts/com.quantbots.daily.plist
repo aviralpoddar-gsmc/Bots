@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: run the quantbots daily trading cycle once per day at 09:00 local.
+
+  Install:
+    cp scripts/com.quantbots.daily.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.quantbots.daily.plist
+
+  Disable (stop live trading):
+    launchctl unload ~/Library/LaunchAgents/com.quantbots.daily.plist
+
+  Run once now (manual trigger):
+    launchctl start com.quantbots.daily
+
+  Logs: data/daily.out.log and data/daily.err.log in the repo.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.quantbots.daily</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mikhail/Bots/scripts/daily_cycle.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mikhail/Bots</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd has a minimal PATH; add Homebrew (doppler) + system bins. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- Set QUANTBOTS_LIVE=0 here to make the daily cycle dry-run only. -->
+        <key>QUANTBOTS_LIVE</key>
+        <string>1</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mikhail/Bots/data/daily.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mikhail/Bots/data/daily.err.log</string>
+</dict>
+</plist>

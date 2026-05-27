@@ -4,6 +4,7 @@
     quantbots refresh                # pull markets into the local cache
     quantbots ingest                 # fetch external data sources into the cache
     quantbots run --bot NAME         # dry-run a bot (default); add --live to trade
+    quantbots status                 # dashboard: balance, per-bot PnL, exposure
     quantbots resolve --bot NAME     # close out resolved positions
     quantbots snapshot               # roll up PnL + print leaderboard
     quantbots strategies             # list registered strategies
@@ -39,6 +40,51 @@ def health() -> None:
     """Confirm the API key + Cloudflare Access both work (calls /me)."""
     me = _client().get_me()
     console.print(f"[green]OK[/] — @{me.get('username')} balance Ṁ{me.get('balance')}")
+
+
+@app.command()
+def status(bot: str = typer.Option("", "--bot", help="Limit to one bot (default: all)")) -> None:
+    """Monitoring dashboard: live balance, per-bot PnL, and exposure by underlying."""
+    me = _client().get_me()
+    console.print(f"Account [cyan]@{me.get('username')}[/]  balance [green]Ṁ{me.get('balance'):,.0f}[/]")
+
+    cfgs = [load_bot(bot)] if bot else load_bots()
+    with Store() as store:
+        table = Table(title="Bots — PnL (unrealized uses cached prices)")
+        for col in ("bot", "open", "closed", "invested", "realized", "unrealized", "total PnL"):
+            table.add_column(col, justify="right" if col != "bot" else "left")
+        for cfg in cfgs:
+            b = store.get_bot(cfg.name)
+            if not b:
+                continue
+            p = store.bot_pnl(b["bot_id"])
+            table.add_row(
+                cfg.name, str(p["open_positions"]), str(p["closed_positions"]),
+                f"Ṁ{p['total_invested']:,.0f}", f"Ṁ{p['realized_pnl']:,.0f}",
+                f"Ṁ{p['unrealized_pnl']:,.0f}", f"Ṁ{p['pnl']:,.0f}",
+            )
+        console.print(table)
+
+        # Exposure by correlation group (per bot) — concentration at a glance.
+        for cfg in cfgs:
+            b = store.get_bot(cfg.name)
+            if not b:
+                continue
+            positions = store.open_positions(b["bot_id"])
+            if not positions:
+                continue
+            try:
+                strat = get_strategy(cfg.strategy, **cfg.params)
+            except Exception:  # noqa: BLE001 - LLM/quant extras may be absent
+                continue
+            exposure: dict[str, float] = {}
+            for mid, pos in positions.items():
+                m = store.get_cached_market(mid) or {"id": mid}
+                g = strat.correlation_key(m)
+                exposure[g] = exposure.get(g, 0.0) + (pos.get("net_amount") or 0.0)
+            if exposure:
+                groups = ", ".join(f"{g}: Ṁ{v:,.0f}" for g, v in sorted(exposure.items(), key=lambda x: -x[1]))
+                console.print(f"  [yellow]{cfg.name}[/] exposure — {groups}")
 
 
 @app.command()
@@ -135,10 +181,21 @@ def run(
             bot=cfg, client=_client(cfg.api_key), store=store, strategy=strat, dry_run=not live
         )
     mode = "[red]LIVE[/]" if live else "[yellow]dry-run[/]"
-    console.print(f"{mode} {result.bot}: {len(result.signals)} signals on {result.n_markets} markets")
-    _print_signals(result.signals)
+    console.print(
+        f"{mode} {result.bot}: funded {len(result.signals)} of {result.candidates} "
+        f"candidate orders on {result.n_markets} markets"
+    )
+    book = result.book or {}
+    if book:
+        console.print(
+            f"  book: staked [cyan]Ṁ{book.get('staked', 0):,.0f}[/] "
+            f"exp.profit [green]Ṁ{book.get('exp_profit', 0):,.0f}[/] "
+            f"(exp.ROI {book.get('exp_roi', 0):+.0%}) "
+            f"across {len(book.get('groups', {}))} correlation groups"
+        )
+    _print_signals(result.signals[:25])
     if not live:
-        console.print(f"validated {len(result.signals)} orders, {len(result.errors)} errors")
+        console.print(f"validated a sample, {len(result.errors)} errors")
     else:
         console.print(f"[green]placed[/] {result.orders_placed} orders, {len(result.errors)} errors")
     for e in result.errors[:10]:
