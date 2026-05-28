@@ -122,6 +122,12 @@ class TermStructureStrategy(Strategy):
         # pseudo-count means a date with no nearby anchor stays ~0.5 (no confident
         # extrapolation), so we only correct dates the term structure actually pins.
         bw2 = 2.0 * self.bandwidth * self.bandwidth
+        # Anchor dates (for explanation), as (date_str, prob).
+        anchor_labels: list[tuple[str, float]] = []
+        for o, p, is_a, am in pts:
+            if is_a:
+                _met, adate = ladder_key(am.get("question", ""))
+                anchor_labels.append((adate, p))
         out: dict[str, float] = {}
         for oi, prob_i, is_anchor, m in pts:
             if is_anchor:
@@ -130,9 +136,41 @@ class TermStructureStrategy(Strategy):
                 continue
             num = self.prior_strength * 0.5
             den = self.prior_strength
-            for oj, pj in anchors:
+            contribs: list[tuple[str, float, float]] = []  # (date, prob, weight)
+            for (oj, pj), (adate, _) in zip(anchors, anchor_labels):
                 k = math.exp(-((oi - oj) ** 2) / bw2)  # Gaussian in time-distance
                 num += k * pj
                 den += k
-            out[m["id"]] = min(max(num / den, 0.01), 0.99)
+                contribs.append((adate, pj, k))
+            p_smooth = min(max(num / den, 0.01), 0.99)
+            out[m["id"]] = p_smooth
+            _metric, this_date = ladder_key(m.get("question", ""))
+            ts_key = self._ts_key(m) or ""
+            self._explanations[m["id"]] = {
+                "ts_key": ts_key, "date": this_date,
+                "market_prob": m["probability"], "smoothed": p_smooth,
+                "bandwidth": self.bandwidth, "n_anchors": len(anchors),
+                "contribs": sorted(contribs, key=lambda c: -c[2])[:5],
+                "prior_weight": self.prior_strength, "total_weight": den,
+            }
         return out
+
+    def explain(self, market_id: str) -> str | None:
+        d = self._explanations.get(market_id)
+        if not d:
+            return None
+        # Show the top-weighted anchor contributions: which neighbouring dates
+        # actually drove the smoothed value, and how much weight each carried.
+        contrib_lines = "\n".join(
+            f"  - {ad}: market={ap:.2f}, kernel_weight={w:.2f}"
+            for ad, ap, w in d["contribs"]
+        )
+        return (
+            f"- Term-structure curve: **{d['ts_key']}**\n"
+            f"- This date ({d['date']}): market priced **{d['market_prob']:.2f}** "
+            f"(stale — no trade volume / near 0.50)\n"
+            f"- Gaussian kernel smoother: bandwidth={d['bandwidth']:.1f} months, "
+            f"{d['n_anchors']} traded anchors on this curve\n"
+            f"- Top-weighted anchors:\n{contrib_lines}\n"
+            f"- Smoothed estimate from neighbours: **{d['smoothed']:.3f}**"
+        )

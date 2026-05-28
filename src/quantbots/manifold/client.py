@@ -37,7 +37,7 @@ class ManifoldClient:
         *,
         cf_client_id: str | None = None,
         cf_client_secret: str | None = None,
-        timeout: int = 30,
+        timeout: int = 60,
         max_retries: int = 3,
     ):
         api_key = api_key or os.environ.get("MANIFOLD_CLONE_API_KEY")
@@ -93,9 +93,21 @@ class ManifoldClient:
         self._rate_limit()
         url = f"{self.base_url}/{endpoint}"
         for attempt in range(self.max_retries + 1):
-            resp = self.session.request(
-                method, url, params=params, json=data, timeout=self.timeout
-            )
+            try:
+                resp = self.session.request(
+                    method, url, params=params, json=data, timeout=self.timeout
+                )
+            except (requests.Timeout, requests.ConnectionError) as e:
+                if attempt >= self.max_retries:
+                    raise
+                backoff = 2**attempt
+                logger.warning(
+                    "%s %s -> %s, retry %d/%d in %ds",
+                    method, endpoint, type(e).__name__,
+                    attempt + 1, self.max_retries, backoff,
+                )
+                time.sleep(backoff)
+                continue
             if resp.status_code in self.retry_on and attempt < self.max_retries:
                 backoff = 2**attempt
                 logger.warning(
@@ -189,3 +201,12 @@ class ManifoldClient:
     def batch_sell(self, sells: list[dict]) -> Any:
         """Up to 50 sells. Each: {contractId, outcome?, shares?}."""
         return self._request("POST", "batch-sell", data={"sells": sells})
+
+    def post_comment(self, contract_id: str, markdown: str) -> dict:
+        """Post a markdown comment on a market. Used for trade-justification
+        comments. Callers should wrap in try/except — a comment failure must
+        never unwind a real bet."""
+        return self._request("POST", "comment", data={
+            "contractId": contract_id,
+            "markdown": markdown,
+        })

@@ -88,6 +88,7 @@ def summarize_position(position_trades: list[dict]) -> dict[str, Any]:
         "direction": direction,
         "entry_amount": entry_amount,
         "exit_amount": exit_amount,
+        "entry_shares": entry_shares,
         "net_shares": net_shares,
         "net_amount": entry_amount - exit_amount,
         "status": status,

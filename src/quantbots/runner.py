@@ -34,6 +34,48 @@ def _is_throttle(resp_or_err: Any) -> bool:
     return "high volume" in txt or "try again" in txt or "queue" in txt or "rate limit" in txt
 
 
+def format_trade_comment(
+    bot_name: str, signal: dict, fill: dict, strategy_explanation: str | None,
+) -> str:
+    """Markdown comment posted alongside a successful bet. Universal numbers
+    (model vs market vs edge) plus the strategy's own reasoning block."""
+    est = signal["estimate"]
+    cur = signal["current_prob"]
+    side = signal["direction"]
+    amount = int(fill.get("amount") or signal["amount"])
+    # Signed edge: positive means our estimate diverges from market in the
+    # direction we're betting (YES if est>cur, NO if est<cur).
+    signed_edge = (est - cur) if side == "YES" else (cur - est)
+    # Expected ROI on this single order, ignoring price impact and resolvability.
+    # YES: pay `cur` per share, expected payoff `est` -> ROI = (est-cur)/cur
+    # NO:  pay (1-cur) per share, expected payoff (1-est) -> ROI = (cur-est)/(1-cur)
+    if side == "YES" and cur > 0:
+        exp_roi = (est - cur) / cur
+    elif side == "NO" and cur < 1:
+        exp_roi = (cur - est) / (1.0 - cur)
+    else:
+        exp_roi = 0.0
+    lines = [
+        f"**quantbots / {bot_name}**",
+        f"Model fair value: **{est:.2f}**",
+        f"Market price: **{cur:.2f}**",
+        f"Edge: **{signed_edge:+.2f}** ({side} side)",
+    ]
+    if strategy_explanation:
+        lines.append("")
+        lines.append("Reasoning:")
+        lines.append(strategy_explanation)
+    lines.append("")
+    lines.append(f"Position: {side} Ṁ{amount}")
+    if "probAfter" in fill:
+        lines.append(f"Fill: price {fill.get('probBefore', cur):.3f} → {fill['probAfter']:.3f}")
+    if exp_roi > 0:
+        lines.append(f"Expected ROI on this order: **{exp_roi:+.0%}**")
+    lines.append("")
+    lines.append("_automated; comment generated from the model's own numbers_")
+    return "\n".join(lines)
+
+
 @dataclass
 class RunResult:
     bot: str
@@ -47,7 +89,11 @@ class RunResult:
 
 
 def _settlement_prob(market: dict) -> float | None:
-    """Market probability to settle a resolved binary at: 1.0 / 0.0 / MKT prob."""
+    """Market probability to settle a resolved binary at: 1.0 / 0.0 / MKT prob.
+
+    Returns None for CANCEL/N-A — those refund the stake and must be closed at
+    the per-share cost basis, not at a uniform probability. See `_close_cancel`.
+    """
     res = market.get("resolution")
     if res == "YES":
         return 1.0
@@ -58,20 +104,54 @@ def _settlement_prob(market: dict) -> float | None:
     return None
 
 
+def _cost_per_share(pos: dict) -> float:
+    """Per-share entry cost basis for a position summary."""
+    return pos["entry_amount"] / pos["entry_shares"] if pos["entry_shares"] > 1e-9 else 0.0
+
+
 def sync_resolutions(client: ManifoldClient, store: Store, bot_id: int) -> int:
     """For each open position, if the market has resolved, insert a synthetic
-    RESOLUTION_CLOSE trade so PnL realizes with no special-case code."""
+    RESOLUTION_CLOSE trade so PnL realizes with no special-case code.
+
+    Reads market state from the local cache (populated by `refresh`, which is the
+    bulk paginated endpoint — ~1800 markets/sec vs ~1/sec for per-id `get_market`).
+    The single-market endpoint is only used for cache misses, so a bot with N open
+    positions costs ~0 API calls instead of N. The daily cycle must run `refresh`
+    BEFORE `resolve` for this to be correct.
+    """
     closed = 0
+    skipped = 0
+    fallback_fetches = 0
     for market_id, pos in store.open_positions(bot_id).items():
-        market = client.get_market(market_id)
-        store.upsert_markets([market])
+        market = store.get_cached_market(market_id)
+        if market is None:
+            # Cache miss — rare after a refresh. Fall back to the API; on failure
+            # skip this position and continue (one bad market must not abort).
+            try:
+                market = client.get_market(market_id)
+                store.upsert_markets([market])
+                fallback_fetches += 1
+            except Exception as e:
+                logger.warning("resolve: skipping %s (%s)", market_id, e)
+                skipped += 1
+                continue
         if not market.get("isResolved"):
             continue
-        prob = _settlement_prob(market)
-        if prob is None:
-            continue
+        resolution = market.get("resolution")
         net_shares = pos["net_shares"]
-        proceeds = net_shares * (prob if pos["direction"] == "YES" else 1 - prob)
+        if resolution in ("CANCEL", "N/A", "NA"):
+            # Stake refunded -> close at per-share cost basis so realized PnL = 0.
+            # Without this branch CANCEL positions (~93% of all resolutions on the
+            # clone) sit open in the ledger forever.
+            cps = _cost_per_share(pos)
+            settle = cps if pos["direction"] == "YES" else 1.0 - cps
+            proceeds = net_shares * cps
+        else:
+            prob = _settlement_prob(market)
+            if prob is None:
+                continue
+            settle = prob
+            proceeds = net_shares * (prob if pos["direction"] == "YES" else 1 - prob)
         store.record_trade(
             bot_id=bot_id,
             market_id=market_id,
@@ -79,10 +159,14 @@ def sync_resolutions(client: ManifoldClient, store: Store, bot_id: int) -> int:
             direction=pos["direction"],
             amount=proceeds,
             shares=net_shares,
-            price_after=prob,
-            reasoning=f"resolved {market.get('resolution')}",
+            price_after=settle,
+            reasoning=f"resolved {resolution}",
         )
         closed += 1
+    if fallback_fetches:
+        logger.info("resolve: %d cache-miss fallback fetches", fallback_fetches)
+    if skipped:
+        logger.warning("resolve: %d positions skipped due to fetch failure", skipped)
     return closed
 
 
@@ -208,6 +292,15 @@ def run_bot(
     # bets were NOT placed, so we collect and retry them with backoff (safe, no
     # double-bet). Hard errors (bad payload, insufficient balance) are not retried.
     by_id = {s["market_id"]: s for s in signals}
+    # Commenting is part of the pipeline contract — every successful bet posts
+    # a justification comment. Disabling is opt-in for testing only; log so it
+    # never happens by accident in production.
+    post_comments = bool(bot.limits.get("post_comments", True))
+    if not post_comments:
+        logger.warning(
+            "bot %s has post_comments=false — running without trade-justification "
+            "comments. This should only be used for testing.", bot.name,
+        )
 
     def _record(resp: dict, s: dict) -> None:
         store.record_trade(
@@ -218,6 +311,14 @@ def run_bot(
             llm_estimate=s["estimate"],
         )
         result.orders_placed += 1
+        if post_comments:
+            try:
+                markdown = format_trade_comment(
+                    bot.name, s, resp, strategy.explain(s["market_id"]),
+                )
+                client.post_comment(s["market_id"], markdown)
+            except Exception as e:  # noqa: BLE001 - comment failure must NOT unwind the bet
+                logger.warning("comment-post failed for %s: %s", s["market_id"], e)
 
     pending = list(signals)
     for attempt in range(MAX_BET_ATTEMPTS):

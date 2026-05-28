@@ -30,14 +30,17 @@ run() { log "+ $*"; doppler run -- "$@"; }
 
 log "=== quantbots daily cycle start (live=${QUANTBOTS_LIVE:-1}) ==="
 
-# 1. Realize PnL on positions whose markets resolved (per bot).
+# 1. Refresh the market cache (new markets, current prices) and external feeds.
+#    MUST run before `resolve`: the bulk markets endpoint is ~1800x faster than
+#    fetching per-id, so resolve reads cached state instead of doing N API calls
+#    per open position. Stale cache here means missed resolutions.
+run quantbots refresh --limit 70000 || log "refresh failed (continuing with stale cache)"
+run quantbots ingest || log "ingest failed (continuing with stale feeds)"
+
+# 2. Realize PnL on positions whose markets resolved (per bot). Reads from cache.
 for bot in "${BOTS[@]}"; do
   run quantbots resolve --bot "$bot" || log "resolve $bot failed (continuing)"
 done
-
-# 2. Refresh the market cache (new markets, current prices) and external feeds.
-run quantbots refresh --limit 70000 || log "refresh failed (continuing with stale cache)"
-run quantbots ingest || log "ingest failed (continuing with stale feeds)"
 
 # 3. Trade each bot.
 for bot in "${BOTS[@]}"; do
