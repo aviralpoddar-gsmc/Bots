@@ -47,7 +47,11 @@ class RunResult:
 
 
 def _settlement_prob(market: dict) -> float | None:
-    """Market probability to settle a resolved binary at: 1.0 / 0.0 / MKT prob."""
+    """Market probability to settle a resolved binary at: 1.0 / 0.0 / MKT prob.
+
+    Returns None for CANCEL/N-A — those refund the stake and must be closed at
+    the per-share cost basis, not at a uniform probability. See `_close_cancel`.
+    """
     res = market.get("resolution")
     if res == "YES":
         return 1.0
@@ -58,20 +62,54 @@ def _settlement_prob(market: dict) -> float | None:
     return None
 
 
+def _cost_per_share(pos: dict) -> float:
+    """Per-share entry cost basis for a position summary."""
+    return pos["entry_amount"] / pos["entry_shares"] if pos["entry_shares"] > 1e-9 else 0.0
+
+
 def sync_resolutions(client: ManifoldClient, store: Store, bot_id: int) -> int:
     """For each open position, if the market has resolved, insert a synthetic
-    RESOLUTION_CLOSE trade so PnL realizes with no special-case code."""
+    RESOLUTION_CLOSE trade so PnL realizes with no special-case code.
+
+    Reads market state from the local cache (populated by `refresh`, which is the
+    bulk paginated endpoint — ~1800 markets/sec vs ~1/sec for per-id `get_market`).
+    The single-market endpoint is only used for cache misses, so a bot with N open
+    positions costs ~0 API calls instead of N. The daily cycle must run `refresh`
+    BEFORE `resolve` for this to be correct.
+    """
     closed = 0
+    skipped = 0
+    fallback_fetches = 0
     for market_id, pos in store.open_positions(bot_id).items():
-        market = client.get_market(market_id)
-        store.upsert_markets([market])
+        market = store.get_cached_market(market_id)
+        if market is None:
+            # Cache miss — rare after a refresh. Fall back to the API; on failure
+            # skip this position and continue (one bad market must not abort).
+            try:
+                market = client.get_market(market_id)
+                store.upsert_markets([market])
+                fallback_fetches += 1
+            except Exception as e:
+                logger.warning("resolve: skipping %s (%s)", market_id, e)
+                skipped += 1
+                continue
         if not market.get("isResolved"):
             continue
-        prob = _settlement_prob(market)
-        if prob is None:
-            continue
+        resolution = market.get("resolution")
         net_shares = pos["net_shares"]
-        proceeds = net_shares * (prob if pos["direction"] == "YES" else 1 - prob)
+        if resolution in ("CANCEL", "N/A", "NA"):
+            # Stake refunded -> close at per-share cost basis so realized PnL = 0.
+            # Without this branch CANCEL positions (~93% of all resolutions on the
+            # clone) sit open in the ledger forever.
+            cps = _cost_per_share(pos)
+            settle = cps if pos["direction"] == "YES" else 1.0 - cps
+            proceeds = net_shares * cps
+        else:
+            prob = _settlement_prob(market)
+            if prob is None:
+                continue
+            settle = prob
+            proceeds = net_shares * (prob if pos["direction"] == "YES" else 1 - prob)
         store.record_trade(
             bot_id=bot_id,
             market_id=market_id,
@@ -79,10 +117,14 @@ def sync_resolutions(client: ManifoldClient, store: Store, bot_id: int) -> int:
             direction=pos["direction"],
             amount=proceeds,
             shares=net_shares,
-            price_after=prob,
-            reasoning=f"resolved {market.get('resolution')}",
+            price_after=settle,
+            reasoning=f"resolved {resolution}",
         )
         closed += 1
+    if fallback_fetches:
+        logger.info("resolve: %d cache-miss fallback fetches", fallback_fetches)
+    if skipped:
+        logger.warning("resolve: %d positions skipped due to fetch failure", skipped)
     return closed
 
 
