@@ -41,15 +41,13 @@ def create_app(*, fetch_balance: bool = True) -> Flask:
     @app.route("/")
     def index() -> str:
         with Store() as store:
+            lb = ddata.leaderboard(store)
             ctx = {
                 "overview": ddata.overview(store),
-                "leaderboard": ddata.leaderboard(store),
-                "bots": [
-                    b for b in (ddata.bot_detail(store, r["name"])
-                                for r in ddata.leaderboard(store))
-                    if b is not None
-                ],
-                "activity": ddata.activity_feed(store, limit=30),
+                "leaderboard": lb,
+                "bots": [b for b in (ddata.bot_detail(store, r["name"]) for r in lb) if b is not None],
+                "activity": ddata.activity_feed(store, limit=25),
+                "cumulative_pnl": ddata.cumulative_pnl_series(store),
                 "account": _account(),
                 "refreshed_at": datetime.now().strftime("%H:%M:%S"),
                 "humanize_age": ddata.humanize_age,
