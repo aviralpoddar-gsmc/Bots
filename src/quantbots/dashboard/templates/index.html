@@ -37,6 +37,21 @@
       <div class="label">API latency</div>
       <div class="mono text-sm font-semibold mt-1">{% if system.latency_ms is not none %}{{ system.latency_ms }}ms{% else %}—{% endif %}</div>
     </div>
+    <div class="px-5">
+      <div class="label">Cache age</div>
+      <div class="mono text-sm font-semibold mt-1 flex items-center gap-2 justify-end">
+        {% if cache_age_s is not none %}
+          <span class="{% if cache_age_s > 1800 %}text-warn{% endif %}">
+            {% if cache_age_s < 60 %}{{ cache_age_s }}s
+            {% elif cache_age_s < 3600 %}{{ cache_age_s // 60 }}m
+            {% else %}{{ cache_age_s // 3600 }}h{% endif %}
+          </span>
+        {% else %}—{% endif %}
+        <form action="{{ url_for('refresh_cache') }}" method="post" class="inline">
+          <button type="submit" class="btn" title="Refresh market cache (~30s)">↻</button>
+        </form>
+      </div>
+    </div>
     {% if system.username %}
     <div class="pl-5 text-left">
       <div class="label">Operator</div>
@@ -52,17 +67,28 @@
    SECTION 2 — EXECUTIVE SUMMARY (6 KPIs)
 ============================================================= #}
 <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-14">
-  {# Total PnL — anchor metric #}
+  {# Total PnL — anchor metric. Uses Manifold's exact formula when account data
+     is available: (balance + mark) − totalDeposits. Falls back to sum-of-bot-PnLs. #}
+  {% set headline_pnl = tot.account_profit if tot.account_profit is defined else tot.total_pnl %}
   <div class="card p-5 lg:col-span-2">
-    <div class="label">Total Portfolio PnL</div>
+    <div class="label flex items-center justify-between">
+      <span>Total Portfolio PnL</span>
+      {% if tot.pnl_drift is defined and tot.pnl_drift|abs > 50 %}
+        <span class="badge status-warn" title="Drift between bot-ledger PnL and Manifold's reported profit ({{ '{:+,.0f}'.format(tot.pnl_drift) }} Ṁ). Refresh the cache.">CACHE STALE</span>
+      {% endif %}
+    </div>
     <div class="mono text-[44px] font-bold leading-none mt-3">
-      {% if tot.total_pnl >= 0 %}+{% endif %}Ṁ{{ '{:,.0f}'.format(tot.total_pnl|abs) }}
+      {% if headline_pnl >= 0 %}+{% endif %}Ṁ{{ '{:,.0f}'.format(headline_pnl|abs) }}
     </div>
     <div class="flex items-center gap-3 mt-3 text-[13px]">
-      <span class="mono font-semibold {{ arrow_cls(tot.roi or 0) }}">
-        {% if tot.roi is not none %}{{ '{:.2%}'.format(tot.roi|abs) }}{% else %}—{% endif %}
-      </span>
-      <span class="text-ink-500">ROI on Ṁ{{ '{:,.0f}'.format(tot.total_invested) }} deployed</span>
+      {% if tot.account_deposits is defined and tot.account_deposits > 0 %}
+        {% set acc_roi = headline_pnl / tot.account_deposits %}
+        <span class="mono font-semibold {{ arrow_cls(acc_roi) }}">{{ '{:.2%}'.format(acc_roi|abs) }}</span>
+        <span class="text-ink-500">on Ṁ{{ '{:,.0f}'.format(tot.account_deposits) }} deposited</span>
+      {% else %}
+        <span class="mono font-semibold {{ arrow_cls(tot.roi or 0) }}">{% if tot.roi is not none %}{{ '{:.2%}'.format(tot.roi|abs) }}{% else %}—{% endif %}</span>
+        <span class="text-ink-500">ROI on Ṁ{{ '{:,.0f}'.format(tot.total_invested) }} cost basis</span>
+      {% endif %}
     </div>
     <div class="divider my-4"></div>
     <div class="grid grid-cols-2 gap-4 text-[12px]">
@@ -77,28 +103,28 @@
     </div>
   </div>
 
-  {# Active capital #}
+  {# Active capital — mark value of open positions, matches Manifold's "Invested" #}
   <div class="card p-5">
     <div class="label">Active capital</div>
-    <div class="mono text-[28px] font-bold leading-none mt-3">Ṁ{{ '{:,.0f}'.format(tot.total_invested) }}</div>
-    <div class="text-ink-500 text-[12px] mt-3">Deployed across bots</div>
+    <div class="mono text-[28px] font-bold leading-none mt-3">Ṁ{{ '{:,.0f}'.format(tot.active_capital) }}</div>
+    <div class="text-ink-500 text-[12px] mt-3">Mark value of open positions</div>
     <div class="divider my-3"></div>
-    {% set util = (tot.total_invested / system.balance) if system.balance and system.balance > 0 else 0 %}
+    {% set util = (tot.active_capital / system.balance) if system.balance and system.balance > 0 else 0 %}
     <div class="flex items-center justify-between mb-1">
-      <span class="label">Capital utilization</span>
+      <span class="label">vs balance</span>
       <span class="mono text-[11px] text-ink-700 font-semibold">{{ '{:.0%}'.format(util) }}</span>
     </div>
     <div class="sparkbar"><div style="width: {{ (util * 100)|round(1) }}%"></div></div>
   </div>
 
-  {# Trades #}
+  {# Trades — matches Manifold's bet count (entries + exits) #}
   <div class="card p-5">
     <div class="label">Trades executed</div>
     <div class="mono text-[28px] font-bold leading-none mt-3">{{ '{:,}'.format(tot.n_trades) }}</div>
-    <div class="text-ink-500 text-[12px] mt-3">All-time entries</div>
+    <div class="text-ink-500 text-[12px] mt-3">{{ tot.n_entries }} entries · {{ tot.n_trades - tot.n_entries }} sells</div>
     <div class="divider my-3"></div>
     <div class="flex items-center justify-between text-[12px]">
-      <div><div class="label">Avg trade</div><div class="mono mt-0.5 text-sm font-semibold">Ṁ{{ '{:.0f}'.format(tot.total_mana_traded / tot.n_trades) if tot.n_trades else '—' }}</div></div>
+      <div><div class="label">Avg PnL/trade</div><div class="mono mt-0.5 text-sm font-semibold {{ arrow_cls(tot.avg_pnl_per_trade) }}">{{ '{:+.2f}'.format(tot.avg_pnl_per_trade) }}</div></div>
       <div class="text-right"><div class="label">Gross flow</div><div class="mono mt-0.5 text-sm font-semibold">Ṁ{{ '{:,.0f}'.format(tot.total_mana_traded) }}</div></div>
     </div>
   </div>

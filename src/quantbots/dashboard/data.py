@@ -158,6 +158,8 @@ def _bot_status_row(store: Store, cfg: BotConfig) -> dict[str, Any]:
         base["description"] = ""
     if not b:
         base["status"] = _bot_status(cfg, base)
+        base["invested_mark"] = 0.0
+        base["n_trades_all"] = 0
         base.update(_risk_block(base, cfg))
         return base
     bot_id = b["bot_id"]
@@ -165,6 +167,15 @@ def _bot_status_row(store: Store, cfg: BotConfig) -> dict[str, Any]:
     pnl = bot_pnl(trades, current_prob=store.current_prob)
     wlr = _wins_losses_refunds(trades)
     agg = _trade_aggregates(trades)
+    # Mark value of currently-open positions — this is what Manifold calls
+    # "Invested": the mana you'd get back if you sold every open position at the
+    # current mid-price. Differs from historical entry total (cost basis).
+    invested_mark = 0.0
+    for mid, pos in store.open_positions(bot_id).items():
+        cur = store.current_prob(mid)
+        if cur is None:
+            continue
+        invested_mark += pos["net_shares"] * (cur if pos["direction"] == "YES" else 1.0 - cur)
     snaps = store.conn.execute(
         "SELECT snapshot_date, pnl, realized_pnl, unrealized_pnl FROM pnl_snapshot "
         "WHERE bot_id=? ORDER BY snapshot_date", (bot_id,),
@@ -173,12 +184,16 @@ def _bot_status_row(store: Store, cfg: BotConfig) -> dict[str, Any]:
     base.update({
         "bot_id": bot_id, "exists": True,
         "pnl": pnl["pnl"], "realized": pnl["realized_pnl"], "unrealized": pnl["unrealized_pnl"],
-        "invested": pnl["total_invested"],
+        "invested": pnl["total_invested"],     # historical cost basis (sum of entries)
+        "invested_mark": invested_mark,         # current mark value of open positions
         "open": pnl["open_positions"], "closed": pnl["closed_positions"],
         "wins": wlr["wins"], "losses": wlr["losses"], "refunds": wlr["refunds"],
         "win_rate": wlr["rate"],
         "last_trade_at": max((t["date_executed"] for t in trades), default=None),
         "max_drawdown": _max_drawdown(snap_dicts) or 0.0,
+        # All bet-style rows (entries + exits + partial exits). Matches what
+        # Manifold's "Trades" column reports.
+        "n_trades_all": sum(1 for t in trades if t["trade_type"] in ("ENTRY", "EXIT", "PARTIAL_EXIT")),
         **agg,
     })
     base["status"] = _bot_status(cfg, base)
@@ -190,29 +205,68 @@ def _bot_status_row(store: Store, cfg: BotConfig) -> dict[str, Any]:
 # Aggregations exposed to the templates
 # -----------------------------------------------------------------------------
 
-def overview(store: Store) -> dict[str, Any]:
+def overview(store: Store, account: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Aggregate totals across all bots.
+
+    If `account` is supplied (balance + totalDeposits from the live /me call),
+    we ALSO compute Manifold's "Profit" formula directly: (balance + mark) −
+    totalDeposits. That number should equal our sum-of-bot-PnLs to within a few
+    mana — if it doesn't, the cache is stale.
+    """
     rows = [_bot_status_row(store, cfg) for cfg in load_bots()]
-    invested = sum(r["invested"] for r in rows)
+    invested_cost = sum(r["invested"] for r in rows)
+    invested_mark = sum(r["invested_mark"] for r in rows)
     pnl_sum = sum(r["pnl"] for r in rows)
     n_live = sum(1 for r in rows if r["status"] == "LIVE")
-    return {
+    n_trades_all = sum(r["n_trades_all"] for r in rows)
+
+    out = {
         "n_bots": sum(1 for r in rows if r["exists"]),
         "n_enabled": sum(1 for r in rows if r["enabled"]),
         "n_live": n_live,
         "total_pnl": pnl_sum,
         "total_realized": sum(r["realized"] for r in rows),
         "total_unrealized": sum(r["unrealized"] for r in rows),
-        "total_invested": invested,
-        "total_open": sum(r["total_mana_traded"] for r in rows),  # for "active capital" KPI
+        "total_invested": invested_cost,        # historical cost basis (informational)
+        "active_capital": invested_mark,        # mark value of open positions (matches Manifold)
         "open_positions": sum(r["open"] for r in rows),
         "closed_positions": sum(r["closed"] for r in rows),
         "total_wins": sum(r["wins"] for r in rows),
         "total_losses": sum(r["losses"] for r in rows),
         "total_refunds": sum(r["refunds"] for r in rows),
         "total_mana_traded": sum(r["total_mana_traded"] for r in rows),
-        "n_trades": sum(r["n_entries"] for r in rows),
-        "roi": (pnl_sum / invested) if invested else None,
+        "n_trades": n_trades_all,                # entries + exits = matches Manifold
+        "n_entries": sum(r["n_entries"] for r in rows),
+        "roi": (pnl_sum / invested_cost) if invested_cost else None,
+        "avg_pnl_per_trade": (pnl_sum / n_trades_all) if n_trades_all else 0.0,
     }
+    if account:
+        balance = account.get("balance") or 0
+        deposits = account.get("totalDeposits") or 0
+        account_profit = balance + invested_mark - deposits
+        out["account_balance"] = balance
+        out["account_deposits"] = deposits
+        out["account_profit"] = account_profit
+        # Drift between sum-of-bot-PnL and Manifold's true profit. A large drift
+        # almost always means the price cache is stale; small drift is rounding.
+        out["pnl_drift"] = pnl_sum - account_profit
+    return out
+
+
+def cache_age_seconds(store: Store) -> int | None:
+    """How long ago the market cache was last touched, in seconds. None if empty."""
+    row = store.conn.execute(
+        "SELECT MAX(updated_at) AS u FROM market_cache"
+    ).fetchone()
+    if not row or not row["u"]:
+        return None
+    try:
+        t = datetime.fromisoformat(row["u"].replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=UTC)
+    except ValueError:
+        return None
+    return int((datetime.now(UTC) - t).total_seconds())
 
 
 def leaderboard(store: Store) -> list[dict[str, Any]]:
