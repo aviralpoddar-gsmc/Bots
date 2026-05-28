@@ -31,12 +31,17 @@ class _FixedStrategy(Strategy):
 
 class _FlakyClient:
     """batch_bet throttles the first `fail_sweeps` times it sees a contract, then
-    fills. Lets us assert retries happen and nothing is double-recorded."""
+    fills. Lets us assert retries happen and nothing is double-recorded.
 
-    def __init__(self, fail_sweeps=2):
+    Also tracks `post_comment` calls so tests can assert the commenting pipeline
+    fired (or didn't, when comment_fail=True simulates an endpoint failure)."""
+
+    def __init__(self, fail_sweeps=2, comment_fail=False):
         self.fail_sweeps = fail_sweeps
         self.seen: dict[str, int] = {}
         self.fills: dict[str, int] = {}
+        self.comments: list[tuple[str, str]] = []  # (contract_id, markdown)
+        self._comment_fail = comment_fail
 
     def batch_bet(self, bets):
         out = []
@@ -48,8 +53,15 @@ class _FlakyClient:
             else:
                 self.fills[cid] = self.fills.get(cid, 0) + 1
                 out.append({"contractId": cid, "betId": f"bet-{cid}-{self.fills[cid]}",
-                            "amount": b["amount"], "shares": b["amount"], "probAfter": 0.9})
+                            "amount": b["amount"], "shares": b["amount"],
+                            "probBefore": 0.5, "probAfter": 0.9})
         return out
+
+    def post_comment(self, contract_id, markdown):
+        if self._comment_fail:
+            raise RuntimeError("simulated comment endpoint failure")
+        self.comments.append((contract_id, markdown))
+        return {"id": f"cmt-{len(self.comments)}"}
 
 
 def _bot():
@@ -211,3 +223,61 @@ def test_resolve_is_idempotent(store_with_bot):
     store.upsert_markets([{"id": "m1", "isResolved": True, "resolution": "CANCEL"}])
     assert sync_resolutions(_RecordingClient(), store, bot_id) == 1
     assert sync_resolutions(_RecordingClient(), store, bot_id) == 0
+
+
+# --- pipeline contract: commenting fires on every successful bet ----------
+
+def test_commenting_is_default_pipeline_behavior(tmp_path, monkeypatch):
+    """Every successful bet from any bot must post a justification comment.
+
+    This is the platform contract — bot authors don't wire it up, and disabling
+    requires an explicit opt-out. If this test ever fails, the contract is broken
+    and any new bot loses transparency on its trades."""
+    monkeypatch.setattr("quantbots.runner.RETRY_BACKOFF", 0.0)
+    with Store(tmp_path / "t.sqlite") as store:
+        store.upsert_markets(_markets(5))
+        client = _FlakyClient(fail_sweeps=0)  # all fills succeed immediately
+        res = run_bot(bot=_bot(), client=client, store=store,
+                      strategy=_FixedStrategy(), dry_run=False)
+        assert res.orders_placed == 5
+        # Contract: exactly one comment per successful bet.
+        assert len(client.comments) == 5
+        contracts = {c[0] for c in client.comments}
+        assert contracts == {f"m{i}" for i in range(5)}
+        # Each comment carries the universal block — model, market, edge.
+        for _cid, markdown in client.comments:
+            assert "quantbots / t" in markdown
+            assert "Model fair value" in markdown
+            assert "Market price" in markdown
+            assert "Edge:" in markdown
+            assert "Position:" in markdown
+
+
+def test_commenting_failure_does_not_unwind_the_bet(tmp_path, monkeypatch):
+    """Comment endpoint outage must NOT prevent bets from being recorded."""
+    monkeypatch.setattr("quantbots.runner.RETRY_BACKOFF", 0.0)
+    with Store(tmp_path / "t.sqlite") as store:
+        store.upsert_markets(_markets(3))
+        client = _FlakyClient(fail_sweeps=0, comment_fail=True)  # comments fail
+        res = run_bot(bot=_bot(), client=client, store=store,
+                      strategy=_FixedStrategy(), dry_run=False)
+        assert res.orders_placed == 3  # bets still placed and recorded
+        assert client.comments == []   # no comments stored (all raised)
+        assert not res.errors          # bet placement counts as success
+
+
+def test_post_comments_opt_out_disables_comments(tmp_path, monkeypatch, caplog):
+    """Explicit `post_comments: false` in limits disables, but logs a warning."""
+    import logging
+    monkeypatch.setattr("quantbots.runner.RETRY_BACKOFF", 0.0)
+    with Store(tmp_path / "t.sqlite") as store:
+        store.upsert_markets(_markets(2))
+        bot = _bot()
+        bot.limits["post_comments"] = False
+        client = _FlakyClient(fail_sweeps=0)
+        with caplog.at_level(logging.WARNING, logger="quantbots.runner"):
+            res = run_bot(bot=bot, client=client, store=store,
+                          strategy=_FixedStrategy(), dry_run=False)
+        assert res.orders_placed == 2
+        assert client.comments == []
+        assert any("post_comments=false" in r.message for r in caplog.records)

@@ -11,6 +11,7 @@
     quantbots sources                # list registered data sources
     quantbots llm-bench              # rank local LLMs against real ground truth
     quantbots backtest               # measure a bot's calibration + PnL on history
+    quantbots dashboard              # launch the local web dashboard (requires `dashboard` extra)
 """
 
 from __future__ import annotations
@@ -366,6 +367,34 @@ def comment_backfill(
         f"[yellow]skipped {skipped}[/] (missing data), "
         f"[red]failed {failed}[/]"
     )
+
+
+@app.command()
+def dashboard(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address (default: localhost only)"),
+    port: int = typer.Option(8000, "--port", help="Bind port"),
+    open_browser: bool = typer.Option(True, "--open/--no-open",
+                                      help="Open the dashboard URL in a browser on start"),
+) -> None:
+    """Launch the local web dashboard. Reads from data/quantbots.sqlite — no
+    mutations. Requires the `dashboard` extra: `uv sync --extra dashboard`."""
+    try:
+        from .dashboard.server import serve
+    except ImportError as e:
+        raise typer.BadParameter(
+            f"dashboard extra not installed ({e}). Run: uv sync --extra dashboard"
+        ) from None
+    url = f"http://{host}:{port}/"
+    console.print(f"[green]quantbots dashboard[/] → [cyan]{url}[/]  (Ctrl-C to stop)")
+    if open_browser:
+        import threading
+        import time
+        import webbrowser
+        def _open() -> None:
+            time.sleep(0.5)  # let Flask bind before opening
+            webbrowser.open(url)
+        threading.Thread(target=_open, daemon=True).start()
+    serve(host=host, port=port)
 
 
 @app.command()

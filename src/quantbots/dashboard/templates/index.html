@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block content %}
+
+{# ====== Top KPI row ====== #}
+<section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div class="card p-4">
+    <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Total PnL</div>
+    <div class="num text-2xl font-bold {{ 'pos' if overview.total_pnl > 0 else ('neg' if overview.total_pnl < 0 else 'neut') }}">
+      {{ '{:+,.0f}'.format(overview.total_pnl) }}<span class="text-ink-500 text-lg font-normal">  Ṁ</span>
+    </div>
+    <div class="text-ink-500 text-xs mt-1 num">
+      realized <span class="{{ 'pos' if overview.total_realized > 0 else ('neg' if overview.total_realized < 0 else 'neut') }}">{{ '{:+,.0f}'.format(overview.total_realized) }}</span>
+      · unrealized <span class="{{ 'pos' if overview.total_unrealized > 0 else ('neg' if overview.total_unrealized < 0 else 'neut') }}">{{ '{:+,.0f}'.format(overview.total_unrealized) }}</span>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Invested</div>
+    <div class="num text-2xl font-bold text-ink-100">Ṁ{{ '{:,.0f}'.format(overview.total_invested) }}</div>
+    <div class="text-ink-500 text-xs mt-1 num">
+      ROI <span class="{{ 'pos' if overview.total_pnl > 0 else 'neg' }}">{{ '{:+.1%}'.format(overview.total_pnl / overview.total_invested) if overview.total_invested else '—' }}</span>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Open / Closed</div>
+    <div class="num text-2xl font-bold text-ink-100">
+      {{ overview.total_open }}<span class="text-ink-500"> / </span>{{ overview.total_closed }}
+    </div>
+    <div class="text-ink-500 text-xs mt-1">positions</div>
+  </div>
+
+  <div class="card p-4">
+    <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Bots</div>
+    <div class="num text-2xl font-bold text-ink-100">
+      {{ overview.n_enabled }}<span class="text-ink-500"> / </span>{{ overview.n_bots }}
+    </div>
+    <div class="text-ink-500 text-xs mt-1">enabled / total</div>
+  </div>
+</section>
+
+{# ====== Leaderboard ====== #}
+<section class="card p-5 mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold tracking-tight">Leaderboard</h2>
+    <div class="text-xs text-ink-500">ranked by total PnL</div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full tight text-sm">
+      <thead class="text-ink-500 text-xs uppercase tracking-wider border-b border-border">
+        <tr>
+          <th class="text-left">#</th>
+          <th class="text-left">Bot</th>
+          <th class="text-left">Strategy</th>
+          <th class="text-right num">PnL</th>
+          <th class="text-right num">Realized</th>
+          <th class="text-right num">Unrealized</th>
+          <th class="text-right num">Invested</th>
+          <th class="text-right num">Open</th>
+          <th class="text-right num">Closed</th>
+          <th class="text-right num">Win rate</th>
+          <th class="text-right">Last trade</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in leaderboard %}
+        <tr class="border-b border-border-soft hover:bg-bg-800/50">
+          <td class="text-ink-500 num">{{ loop.index }}</td>
+          <td>
+            <a href="#bot-{{ r.name }}" class="font-medium hover:text-indigo-300">{{ r.name }}</a>
+            {% if not r.enabled %}<span class="chip bg-ink-700/30 text-ink-300 ml-2">disabled</span>{% endif %}
+          </td>
+          <td class="text-ink-300">{{ r.strategy }}</td>
+          <td class="text-right num font-semibold {{ 'pos' if r.pnl > 0 else ('neg' if r.pnl < 0 else 'neut') }}">{{ '{:+,.0f}'.format(r.pnl) }}</td>
+          <td class="text-right num {{ 'pos' if r.realized > 0 else ('neg' if r.realized < 0 else 'neut') }}">{{ '{:+,.0f}'.format(r.realized) }}</td>
+          <td class="text-right num {{ 'pos' if r.unrealized > 0 else ('neg' if r.unrealized < 0 else 'neut') }}">{{ '{:+,.0f}'.format(r.unrealized) }}</td>
+          <td class="text-right num text-ink-300">{{ '{:,.0f}'.format(r.invested) }}</td>
+          <td class="text-right num">{{ r.open }}</td>
+          <td class="text-right num text-ink-500">{{ r.closed }}</td>
+          <td class="text-right num">{{ '{:.0%}'.format(r.win_rate) if r.win_rate is not none else '—' }}</td>
+          <td class="text-right text-ink-500 text-xs">{{ humanize_age(r.last_trade_at) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{# ====== Per-bot detail cards + activity feed (2-col layout) ====== #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {# ----- bots: 2 of 3 cols ----- #}
+  <div class="lg:col-span-2 space-y-5">
+    {% for r in bots %}
+    <article id="bot-{{ r.name }}" class="card botcard p-5">
+      <header class="flex items-start justify-between mb-3">
+        <div>
+          <h3 class="text-lg font-semibold">{{ r.name }}</h3>
+          <div class="text-ink-500 text-xs mt-0.5">{{ r.blurb }}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="chip bg-indigo-500/15 text-indigo-300 font-mono">{{ r.strategy }}</span>
+          {% if r.enabled %}<span class="chip bg-emerald-500/15 text-emerald-300">live</span>
+          {% else %}<span class="chip bg-ink-700/40 text-ink-300">disabled</span>{% endif %}
+        </div>
+      </header>
+
+      {# Headline numbers #}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">PnL</div>
+          <div class="num text-xl font-bold {{ 'pos' if r.pnl > 0 else ('neg' if r.pnl < 0 else 'neut') }}">
+            {{ '{:+,.0f}'.format(r.pnl) }}<span class="text-ink-500 text-base font-normal"> Ṁ</span>
+          </div>
+        </div>
+        <div>
+          <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Realized</div>
+          <div class="num text-xl font-bold {{ 'pos' if r.realized > 0 else ('neg' if r.realized < 0 else 'neut') }}">
+            {{ '{:+,.0f}'.format(r.realized) }}<span class="text-ink-500 text-base font-normal"> Ṁ</span>
+          </div>
+        </div>
+        <div>
+          <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Open</div>
+          <div class="num text-xl font-bold">{{ r.open }}<span class="text-ink-500 text-base font-normal"> / {{ r.closed }}</span></div>
+        </div>
+        <div>
+          <div class="text-ink-500 text-xs uppercase tracking-wider mb-1">Win rate</div>
+          <div class="num text-xl font-bold">{{ '{:.0%}'.format(r.win_rate) if r.win_rate is not none else '—' }}</div>
+        </div>
+      </div>
+
+      {# PnL sparkline (if we have snapshot history) #}
+      {% if r.pnl_series and r.pnl_series|length > 1 %}
+      <div class="mb-4">
+        <canvas id="spark-{{ r.name }}" height="60"></canvas>
+        <script>
+          (function () {
+            const ctx = document.getElementById('spark-{{ r.name }}').getContext('2d');
+            const data = {{ r.pnl_series|tojson }};
+            new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: data.map(d => d.date),
+                datasets: [{
+                  data: data.map(d => d.pnl),
+                  borderColor: '#818cf8',
+                  backgroundColor: 'rgba(129, 140, 248, 0.15)',
+                  borderWidth: 2,
+                  fill: true,
+                  tension: 0.35,
+                  pointRadius: 0,
+                }],
+              },
+              options: {
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } },
+                elements: { line: { borderJoinStyle: 'round' } },
+                maintainAspectRatio: false,
+              },
+            });
+          })();
+        </script>
+      </div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {# Top exposures #}
+        <div>
+          <h4 class="text-xs uppercase tracking-wider text-ink-500 mb-2">Top exposures</h4>
+          {% if r.exposures %}
+            <ul class="space-y-1.5">
+              {% for e in r.exposures %}
+              <li class="flex items-center justify-between text-sm">
+                <span class="text-ink-300 truncate mr-2" title="{{ e.key }}">{{ e.key }}</span>
+                <span class="num text-ink-100">Ṁ{{ '{:,.0f}'.format(e.amount) }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-ink-500 text-sm">no open positions</div>
+          {% endif %}
+        </div>
+
+        {# Recent trades #}
+        <div>
+          <h4 class="text-xs uppercase tracking-wider text-ink-500 mb-2">Recent trades</h4>
+          {% if r.recent_trades %}
+            <ul class="space-y-1.5 text-xs">
+              {% for t in r.recent_trades[:6] %}
+              <li class="flex items-start gap-2">
+                <span class="chip {{ 'bg-emerald-500/15 text-emerald-300' if t.direction == 'YES' else 'bg-red-500/15 text-red-300' }}">{{ t.direction }}</span>
+                <span class="text-ink-300 truncate flex-1" title="{{ t.question }}">{{ t.question or t.market_id }}</span>
+                <span class="num text-ink-100 whitespace-nowrap">
+                  Ṁ{{ '{:,.0f}'.format(t.amount) }}
+                  {% if t.price_before is not none and t.price_after is not none %}
+                    <span class="text-ink-500">@ {{ '{:.2f}'.format(t.price_before) }}→{{ '{:.2f}'.format(t.price_after) }}</span>
+                  {% endif %}
+                </span>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-ink-500 text-sm">no recent trades</div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Params / limits — collapsible "details" so the card stays compact #}
+      <details class="mt-4 group">
+        <summary class="text-xs text-ink-500 cursor-pointer hover:text-ink-300 select-none">params &amp; limits</summary>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs">
+          <div>
+            <div class="text-ink-500 mb-1">params</div>
+            <pre class="num text-ink-300 bg-bg-900 p-2 rounded-md border border-border-soft overflow-x-auto">{{ r.params | tojson(indent=2) }}</pre>
+          </div>
+          <div>
+            <div class="text-ink-500 mb-1">limits</div>
+            <pre class="num text-ink-300 bg-bg-900 p-2 rounded-md border border-border-soft overflow-x-auto">{{ r.limits | tojson(indent=2) }}</pre>
+          </div>
+        </div>
+      </details>
+    </article>
+    {% endfor %}
+  </div>
+
+  {# ----- activity feed: 1 of 3 cols ----- #}
+  <aside class="lg:col-span-1">
+    <div class="card p-5 lg:sticky lg:top-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-base font-semibold tracking-tight">Activity</h2>
+        <div class="text-xs text-ink-500">latest {{ activity|length }} trades</div>
+      </div>
+      <ul class="space-y-3 max-h-[80vh] overflow-y-auto pr-1 scrollshadow">
+        {% for a in activity %}
+        <li class="text-xs border-b border-border-soft pb-2 last:border-b-0">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              <span class="chip {{ 'bg-emerald-500/15 text-emerald-300' if a.direction == 'YES' else ('bg-red-500/15 text-red-300' if a.direction == 'NO' else 'bg-ink-700/40 text-ink-300') }}">{{ a.direction }}</span>
+              <a href="#bot-{{ a.bot }}" class="text-indigo-300 hover:text-indigo-200 font-medium">{{ a.bot }}</a>
+            </div>
+            <span class="text-ink-500 num">{{ humanize_age(a.ts) }}</span>
+          </div>
+          <div class="text-ink-300 truncate" title="{{ a.question }}">{{ a.question or a.market_id }}</div>
+          <div class="num text-ink-500 mt-0.5">
+            {% if a.type == 'ENTRY' %}Ṁ{{ '{:,.0f}'.format(a.amount) }}{% if a.estimate is not none and a.price_before is not none %} · model {{ '{:.2f}'.format(a.estimate) }} vs mkt {{ '{:.2f}'.format(a.price_before) }}{% endif %}
+            {% elif a.type == 'RESOLUTION_CLOSE' %}<span class="text-ink-300">resolved</span>
+            {% else %}{{ a.type }}{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </aside>
+</div>
+
+{% endblock %}

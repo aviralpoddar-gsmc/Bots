@@ -5,9 +5,19 @@ returns), so strategies have full fidelity. The required contract is tiny:
 
     estimate(group) -> {market_id: fair_value_probability}
 
-Everything else (client, sizing, execution, ledger, PnL) is shared infrastructure
-a bot author never touches. Optional hooks `prefilter` and `group` let a strategy
-narrow the market universe and decide which markets are evaluated together.
+Everything else (client, sizing, execution, ledger, PnL, **commenting**) is
+shared infrastructure a bot author never touches. Optional hooks `prefilter` and
+`group` let a strategy narrow the market universe and decide which markets are
+evaluated together.
+
+**Pipeline guarantee — commenting.** Every successful bet placed by the runner
+automatically gets a markdown comment posted on its market explaining the model's
+reasoning (universal block: model vs market vs edge vs fill; plus the strategy's
+own `explain()` block if implemented). This is on by default for ALL bots — you
+do not need to wire anything up. To surface strategy-specific reasoning, override
+`explain(market_id)` and populate `self._explanations[market_id]` during
+`estimate`. To disable comments (testing only), set `post_comments: false` in the
+bot's limits — the runner will log a warning that this is unusual.
 """
 
 from __future__ import annotations

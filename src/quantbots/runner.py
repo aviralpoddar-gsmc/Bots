@@ -292,7 +292,15 @@ def run_bot(
     # bets were NOT placed, so we collect and retry them with backoff (safe, no
     # double-bet). Hard errors (bad payload, insufficient balance) are not retried.
     by_id = {s["market_id"]: s for s in signals}
+    # Commenting is part of the pipeline contract — every successful bet posts
+    # a justification comment. Disabling is opt-in for testing only; log so it
+    # never happens by accident in production.
     post_comments = bool(bot.limits.get("post_comments", True))
+    if not post_comments:
+        logger.warning(
+            "bot %s has post_comments=false — running without trade-justification "
+            "comments. This should only be used for testing.", bot.name,
+        )
 
     def _record(resp: dict, s: dict) -> None:
         store.record_trade(
