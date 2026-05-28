@@ -21,7 +21,7 @@ from rich.table import Table
 
 from .config import load_bot, load_bots
 from .manifold.client import ManifoldClient
-from .runner import run_bot, sync_resolutions
+from .runner import format_trade_comment, run_bot, sync_resolutions
 from .sources import available as available_sources
 from .sources.ingest import ingest as run_ingest
 from .store.db import Store
@@ -301,6 +301,71 @@ def resolve(bot: str = typer.Option(..., "--bot")) -> None:
         bot_id = store.upsert_bot(cfg.name, cfg.strategy)
         n = sync_resolutions(_client(cfg.api_key), store, bot_id)
     console.print(f"[green]Closed[/] {n} resolved positions")
+
+
+@app.command(name="comment-backfill")
+def comment_backfill(
+    since: str = typer.Option(..., "--since", help="ISO date, e.g. 2026-05-28"),
+    bot: str = typer.Option("", "--bot", help="Limit to one bot (default: all in bots.yaml)"),
+    dry_run: bool = typer.Option(True, "--dry-run/--live",
+                                 help="Print comments without posting (default: dry-run)"),
+    limit: int = typer.Option(0, "--limit", help="Cap total comments posted (0=no cap)"),
+) -> None:
+    """Post a justification comment on each ENTRY trade since `--since`.
+
+    Strategy-specific reasoning isn't reconstructable from the ledger, so backfill
+    comments include only the universal block (model estimate, market price at
+    fill time, signed edge, position size, fill price impact). New trades from
+    the live runner get full strategy-specific reasoning automatically.
+    """
+    bots = [load_bot(bot)] if bot else load_bots()
+    posted = failed = skipped = 0
+    for cfg in bots:
+        client = _client(cfg.api_key)
+        with Store() as store:
+            bot_id = store.upsert_bot(cfg.name, cfg.strategy)
+            rows = store.conn.execute(
+                "SELECT * FROM trade WHERE bot_id=? AND trade_type='ENTRY' "
+                "AND date_executed >= ? ORDER BY trade_id",
+                (bot_id, since),
+            ).fetchall()
+        console.print(f"[cyan]{cfg.name}[/]: {len(rows)} ENTRY trades since {since}")
+        for r in rows:
+            if limit and posted >= limit:
+                console.print(f"[yellow]hit --limit {limit}, stopping[/]")
+                return
+            signal = {
+                "market_id": r["market_id"],
+                "current_prob": r["price_before"],
+                "estimate": r["llm_estimate"],
+                "direction": r["direction"],
+                "amount": r["amount"],
+            }
+            fill = {
+                "amount": r["amount"], "shares": r["shares"],
+                "probBefore": r["price_before"], "probAfter": r["price_after"],
+            }
+            if signal["estimate"] is None or signal["current_prob"] is None:
+                skipped += 1
+                continue
+            markdown = format_trade_comment(cfg.name, signal, fill, None)
+            if dry_run:
+                console.print(f"\n[dim]--- {r['market_id']} (trade #{r['trade_id']}) ---[/]")
+                console.print(markdown)
+                posted += 1
+            else:
+                try:
+                    client.post_comment(r["market_id"], markdown)
+                    posted += 1
+                except Exception as e:  # noqa: BLE001
+                    console.print(f"[red]failed[/] {r['market_id']}: {e}")
+                    failed += 1
+    mode = "would post" if dry_run else "posted"
+    console.print(
+        f"\n[green]{mode} {posted}[/] comments, "
+        f"[yellow]skipped {skipped}[/] (missing data), "
+        f"[red]failed {failed}[/]"
+    )
 
 
 @app.command()

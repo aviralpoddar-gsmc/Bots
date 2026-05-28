@@ -179,8 +179,16 @@ class LadderArbStrategy(Strategy):
         fitted = isotonic_decreasing(values, weights)
         fair_surv = dict(zip(thresholds, fitted))
 
+        # Snapshot of the ladder for explanations: every (threshold, market_surv,
+        # fitted_surv, informative?) entry, plus aggregate counts.
+        n_informative = sum(1 for _t, _s, w, _id in rows if w > 1.0)
+        ladder_snapshot = [
+            {"threshold": t, "market_surv": agg[t][0] / agg[t][1], "fit_surv": fair_surv[t]}
+            for t in thresholds
+        ]
+
         out: dict[str, float] = {}
-        for threshold, _surv, _w, mid in rows:
+        for threshold, market_surv, w, mid in rows:
             m = next(x for x in usable if x["id"] == mid)
             # Pinned-extreme strikes anchor the fit but are not traded.
             if m["probability"] <= self.skip_extreme or m["probability"] >= 1 - self.skip_extreme:
@@ -188,5 +196,37 @@ class LadderArbStrategy(Strategy):
             _t, direction = parse_threshold(m["question"])  # type: ignore[misc]
             surv = fair_surv[threshold]
             p = surv if direction == "exceeds" else 1.0 - surv
-            out[mid] = min(max(p, 0.01), 0.99)
+            p = min(max(p, 0.01), 0.99)
+            out[mid] = p
+            metric, date = ladder_key(m["question"])
+            self._explanations[mid] = {
+                "metric": metric, "date": date, "threshold": threshold,
+                "direction": direction, "market_surv": market_surv,
+                "fit_surv": surv, "p": p, "informative_w": w,
+                "n_strikes": len(thresholds), "n_informative": n_informative,
+                "ladder": ladder_snapshot,
+            }
         return out
+
+    def explain(self, market_id: str) -> str | None:
+        d = self._explanations.get(market_id)
+        if not d:
+            return None
+        # Compact ladder view: up to 5 nearest strikes around this one, showing
+        # the market's quoted survival vs. the isotonic-fit value.
+        ladder = sorted(d["ladder"], key=lambda r: abs(r["threshold"] - d["threshold"]))[:5]
+        ladder.sort(key=lambda r: r["threshold"])
+        rows = "\n".join(
+            f"  - {r['threshold']:g}: market_surv={r['market_surv']:.2f}, "
+            f"isotonic={r['fit_surv']:.2f}" + (" ← this strike" if r["threshold"] == d["threshold"] else "")
+            for r in ladder
+        )
+        return (
+            f"- Ladder: **{d['metric']}** | resolves {d['date']} | "
+            f"{d['n_strikes']} strikes ({d['n_informative']} informative)\n"
+            f"- Isotonic (PAVA, non-increasing) fit across the ladder\n"
+            f"- This strike (**{d['threshold']:g}**, '{d['direction']}'): "
+            f"market_surv={d['market_surv']:.2f}, fit_surv={d['fit_surv']:.2f} "
+            f"→ P({d['direction']}) = **{d['p']:.3f}**\n"
+            f"- Nearby strikes:\n{rows}"
+        )

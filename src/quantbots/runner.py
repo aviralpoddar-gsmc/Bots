@@ -34,6 +34,48 @@ def _is_throttle(resp_or_err: Any) -> bool:
     return "high volume" in txt or "try again" in txt or "queue" in txt or "rate limit" in txt
 
 
+def format_trade_comment(
+    bot_name: str, signal: dict, fill: dict, strategy_explanation: str | None,
+) -> str:
+    """Markdown comment posted alongside a successful bet. Universal numbers
+    (model vs market vs edge) plus the strategy's own reasoning block."""
+    est = signal["estimate"]
+    cur = signal["current_prob"]
+    side = signal["direction"]
+    amount = int(fill.get("amount") or signal["amount"])
+    # Signed edge: positive means our estimate diverges from market in the
+    # direction we're betting (YES if est>cur, NO if est<cur).
+    signed_edge = (est - cur) if side == "YES" else (cur - est)
+    # Expected ROI on this single order, ignoring price impact and resolvability.
+    # YES: pay `cur` per share, expected payoff `est` -> ROI = (est-cur)/cur
+    # NO:  pay (1-cur) per share, expected payoff (1-est) -> ROI = (cur-est)/(1-cur)
+    if side == "YES" and cur > 0:
+        exp_roi = (est - cur) / cur
+    elif side == "NO" and cur < 1:
+        exp_roi = (cur - est) / (1.0 - cur)
+    else:
+        exp_roi = 0.0
+    lines = [
+        f"**quantbots / {bot_name}**",
+        f"Model fair value: **{est:.2f}**",
+        f"Market price: **{cur:.2f}**",
+        f"Edge: **{signed_edge:+.2f}** ({side} side)",
+    ]
+    if strategy_explanation:
+        lines.append("")
+        lines.append("Reasoning:")
+        lines.append(strategy_explanation)
+    lines.append("")
+    lines.append(f"Position: {side} Ṁ{amount}")
+    if "probAfter" in fill:
+        lines.append(f"Fill: price {fill.get('probBefore', cur):.3f} → {fill['probAfter']:.3f}")
+    if exp_roi > 0:
+        lines.append(f"Expected ROI on this order: **{exp_roi:+.0%}**")
+    lines.append("")
+    lines.append("_automated; comment generated from the model's own numbers_")
+    return "\n".join(lines)
+
+
 @dataclass
 class RunResult:
     bot: str
@@ -250,6 +292,7 @@ def run_bot(
     # bets were NOT placed, so we collect and retry them with backoff (safe, no
     # double-bet). Hard errors (bad payload, insufficient balance) are not retried.
     by_id = {s["market_id"]: s for s in signals}
+    post_comments = bool(bot.limits.get("post_comments", True))
 
     def _record(resp: dict, s: dict) -> None:
         store.record_trade(
@@ -260,6 +303,14 @@ def run_bot(
             llm_estimate=s["estimate"],
         )
         result.orders_placed += 1
+        if post_comments:
+            try:
+                markdown = format_trade_comment(
+                    bot.name, s, resp, strategy.explain(s["market_id"]),
+                )
+                client.post_comment(s["market_id"], markdown)
+            except Exception as e:  # noqa: BLE001 - comment failure must NOT unwind the bet
+                logger.warning("comment-post failed for %s: %s", s["market_id"], e)
 
     pending = list(signals)
     for attempt in range(MAX_BET_ATTEMPTS):

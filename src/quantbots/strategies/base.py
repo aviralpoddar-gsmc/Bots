@@ -26,6 +26,10 @@ class Strategy(ABC):
     def __init__(self, **params: Any):
         #: Free-form strategy parameters from config/bots.yaml `params:`.
         self.params = params
+        #: Per-market reasoning recorded during `estimate`, keyed by market_id.
+        #: Strategies populate this in `estimate` so `explain` can format the
+        #: numbers without re-running the model. Latest-wins on overwrite.
+        self._explanations: dict[str, dict[str, Any]] = {}
 
     def bind(self, observations: Any) -> None:
         """Optional: give the strategy a read handle to ingested observations.
@@ -78,3 +82,14 @@ class Strategy(ABC):
         to return e.g. the underlying entity so all strikes/dates of one quantity
         ("gold price") count against a single per-group budget."""
         return str(market.get("id"))
+
+    def explain(self, market_id: str) -> str | None:
+        """Optional: markdown reasoning for the model estimate, posted as a
+        comment alongside the trade. Default: None (no strategy-specific block;
+        the runner still posts the universal model vs. market vs. edge summary).
+
+        Strategies that override should populate `self._explanations[market_id]`
+        during `estimate` with whatever numbers they reason from, then format them
+        here. Return None if the market wasn't reasoned about (no explanation
+        available)."""
+        return None

@@ -201,3 +201,12 @@ class ManifoldClient:
     def batch_sell(self, sells: list[dict]) -> Any:
         """Up to 50 sells. Each: {contractId, outcome?, shares?}."""
         return self._request("POST", "batch-sell", data={"sells": sells})
+
+    def post_comment(self, contract_id: str, markdown: str) -> dict:
+        """Post a markdown comment on a market. Used for trade-justification
+        comments. Callers should wrap in try/except — a comment failure must
+        never unwind a real bet."""
+        return self._request("POST", "comment", data={
+            "contractId": contract_id,
+            "markdown": markdown,
+        })

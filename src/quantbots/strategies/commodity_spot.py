@@ -162,9 +162,31 @@ class CommoditySpotStrategy(Strategy):
             if not o or o.get("value") is None or o["value"] <= 0 or threshold <= 0:
                 continue
             spot = o["value"] * factor  # feed value in the market's quoted unit
-            sigma = max(annual_vol * math.sqrt(years_to_close(m)), self.min_vol)
+            T = years_to_close(m)
+            sigma = max(annual_vol * math.sqrt(T), self.min_vol)
             # P(spot_at_close > threshold) under lognormal diffusion (zero drift).
             surv = 1.0 - norm_cdf(math.log(threshold / spot) / sigma)
             p = surv if direction == "exceeds" else 1.0 - surv
-            out[m["id"]] = min(max(p, 0.01), 0.99)
+            p = min(max(p, 0.01), 0.99)
+            out[m["id"]] = p
+            self._explanations[m["id"]] = {
+                "entity": entity, "spot": spot, "threshold": threshold,
+                "direction": direction, "annual_vol": annual_vol, "T": T,
+                "sigma": sigma, "surv": surv, "p": p,
+                "obs_ts": o.get("ts"),
+            }
         return out
+
+    def explain(self, market_id: str) -> str | None:
+        d = self._explanations.get(market_id)
+        if not d:
+            return None
+        ts = d.get("obs_ts") or "latest"
+        return (
+            f"- {d['entity']} spot anchor: **${d['spot']:,.2f}** (feed @ {ts})\n"
+            f"- Threshold: **${d['threshold']:,.2f}** ({d['direction']}); "
+            f"{(d['threshold'] / d['spot'] - 1):+.1%} vs spot\n"
+            f"- Lognormal: vol={d['annual_vol']:.2f}/yr, T={d['T']:.2f}y, σ_eff={d['sigma']:.3f}\n"
+            f"- P(spot_at_close > threshold) = {d['surv']:.3f} "
+            f"→ P({d['direction']}) = **{d['p']:.3f}**"
+        )
