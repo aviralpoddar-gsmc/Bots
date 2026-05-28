@@ -10,9 +10,14 @@ __pycache__/
 .env.local
 
 data/*.sqlite
+data/*.sqlite.bak-*
 data/*.db
+data/*.log
+# Pair-research outputs — regenerable via `python scripts/research_pairs.py`.
+data/research/
 
 .DS_Store
 *.egg-info/
 build/
 dist/
+.gstack/
