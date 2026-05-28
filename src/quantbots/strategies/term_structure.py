@@ -54,6 +54,14 @@ def date_ordinal(date_str: str) -> int | None:
 
 class TermStructureStrategy(Strategy):
     name = "term_structure"
+    description = (
+        "Time-axis coherence arbitrage. Holding (metric, threshold) fixed and "
+        "varying resolution date, the survival curve must vary smoothly through "
+        "time — real quantities don't lurch to 0.50 for one date and snap back. "
+        "Fits a Gaussian kernel smoother through informative anchor dates and "
+        "pulls stale 0.50-pinned dates onto the implied curve. Orthogonal to "
+        "ladder_arb (which works across thresholds on one date)."
+    )
 
     def __init__(self, bandwidth: float = 6.0, dev_band: float = 0.03,
                  informative_weight: float = 5.0, min_dates: int = 3,

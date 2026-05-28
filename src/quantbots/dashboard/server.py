@@ -9,6 +9,7 @@ provided for live-monitoring tooling that doesn't want to scrape HTML.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,19 +25,28 @@ HERE = Path(__file__).parent
 
 
 def create_app(*, fetch_balance: bool = True) -> Flask:
-    """Build the Flask app. `fetch_balance=False` skips the /me call (useful for
-    tests / when API creds aren't loaded)."""
+    """Build the Flask app. `fetch_balance=False` skips the /me probe (tests)."""
     app = Flask(__name__, template_folder=str(HERE / "templates"))
 
-    def _account() -> dict[str, Any] | None:
+    def _system_status() -> dict[str, Any]:
         if not fetch_balance:
-            return None
+            return {"username": None, "balance": None, "latency_ms": None, "status": "UNKNOWN"}
+        t0 = time.time()
         try:
             me = ManifoldClient().get_me()
-            return {"username": me.get("username"), "balance": me.get("balance") or 0}
-        except Exception as e:  # noqa: BLE001 - dashboard must render even if API is down
-            logger.warning("could not fetch account: %s", e)
-            return None
+            return {
+                "username": me.get("username"),
+                "balance": me.get("balance") or 0,
+                "latency_ms": int((time.time() - t0) * 1000),
+                "status": "LIVE",
+            }
+        except Exception as e:  # noqa: BLE001 - the dashboard must render even if the API is down
+            logger.warning("system status probe failed: %s", e)
+            return {
+                "username": None, "balance": None,
+                "latency_ms": int((time.time() - t0) * 1000),
+                "status": "DEGRADED",
+            }
 
     @app.route("/")
     def index() -> str:
@@ -46,11 +56,12 @@ def create_app(*, fetch_balance: bool = True) -> Flask:
                 "overview": ddata.overview(store),
                 "leaderboard": lb,
                 "bots": [b for b in (ddata.bot_detail(store, r["name"]) for r in lb) if b is not None],
-                "activity": ddata.activity_feed(store, limit=25),
-                "cumulative_pnl": ddata.cumulative_pnl_series(store),
-                "account": _account(),
-                "refreshed_at": datetime.now().strftime("%H:%M:%S"),
-                "humanize_age": ddata.humanize_age,
+                "equity": ddata.equity_curve(store),
+                "distribution": ddata.strategy_distribution(store),
+                "events": ddata.event_feed(store, limit=60),
+                "system": _system_status(),
+                "now": datetime.now().strftime("%H:%M:%S"),
+                "today": datetime.now().strftime("%a %b %d, %Y"),
             }
         return render_template("index.html", **ctx)
 
@@ -60,16 +71,17 @@ def create_app(*, fetch_balance: bool = True) -> Flask:
             return jsonify({
                 "overview": ddata.overview(store),
                 "leaderboard": ddata.leaderboard(store),
-                "activity": ddata.activity_feed(store, limit=50),
+                "events": ddata.event_feed(store, limit=80),
             })
 
     @app.route("/healthz")
     def healthz() -> Any:
         return jsonify({"ok": True})
 
-    # Templates need `humanize_age` everywhere — register as a Jinja filter too.
     app.jinja_env.filters["humanize_age"] = ddata.humanize_age
+    app.jinja_env.filters["short_clock"] = ddata.short_clock
     app.jinja_env.globals["humanize_age"] = ddata.humanize_age
+    app.jinja_env.globals["short_clock"] = ddata.short_clock
     return app
 
 

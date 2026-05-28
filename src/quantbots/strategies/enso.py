@@ -27,6 +27,13 @@ ENTITY = "ENSO_ONI"
 
 class EnsoStrategy(Strategy):
     name = "enso"
+    description = (
+        "Climate-index forecaster for ENSO / Oceanic Niño Index threshold markets. "
+        "Models ONI as a Gaussian random walk anchored to the latest NOAA monthly "
+        "value, with sigma = monthly_vol × √(months-to-close). Trades "
+        "'will ONI exceed X by month Y' markets where the market price diverges "
+        "from this persistence-model survival."
+    )
 
     def __init__(self, monthly_vol: float = 0.25, min_sigma: float = 0.2, **params: Any):
         super().__init__(monthly_vol=monthly_vol, min_sigma=min_sigma, **params)

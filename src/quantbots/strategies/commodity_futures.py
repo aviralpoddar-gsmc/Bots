@@ -33,6 +33,12 @@ CATALOG = [(re.compile(p, re.I), e) for p, e in _CATALOG_RAW]
 
 class CommodityFuturesStrategy(Strategy):
     name = "commodity_futures"
+    description = (
+        "Lognormal pricing on ICE/CBOT soft-commodity futures threshold markets "
+        "— sugar, cocoa, coffee, cotton, wheat, corn, soybeans. Same diffusion "
+        "model as commodity_spot but anchored to the front-month futures "
+        "contract from Stooq rather than physical spot."
+    )
 
     def __init__(self, annual_vol: float = 0.30, min_vol: float = 0.05, **params: Any):
         super().__init__(annual_vol=annual_vol, min_vol=min_vol, **params)

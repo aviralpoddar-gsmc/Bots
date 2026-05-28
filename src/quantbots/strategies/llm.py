@@ -37,6 +37,13 @@ _SYSTEM = (
 
 class LLMStrategy(Strategy):
     name = "llm"
+    description = (
+        "Local-LLM forecaster for the long tail of markets the deterministic bots "
+        "can't link. Queries a locally-running model (Ollama / llama.cpp) for a "
+        "calibrated probability per market, with confidence caps and CDF-based "
+        "spread widening to control hallucination risk. Hosted inference is "
+        "blocked until backtested profitability is proven."
+    )
 
     def __init__(
         self,

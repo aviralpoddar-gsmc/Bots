@@ -99,6 +99,14 @@ _CATALOG = [
 
 class CommoditySpotStrategy(Strategy):
     name = "commodity_spot"
+    description = (
+        "Trades binary 'spot price exceeds X by date Y' markets for commodities "
+        "we carry a live feed for (gold, silver, platinum, palladium, copper, "
+        "WTI, Brent, gasoline). Prices each strike under a zero-drift lognormal "
+        "CDF anchored to the latest Stooq spot, with sigma = realized annual "
+        "vol × √(years-to-close). Edge comes from tail strikes pinned far from "
+        "current spot (e.g. 0.95+ quotes that the model says are 0.05)."
+    )
 
     def __init__(self, vols: dict[str, float] | None = None, min_vol: float = 0.05,
                  max_horizon_years: float = 1.25, **params: Any):
