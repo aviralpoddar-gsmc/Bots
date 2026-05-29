@@ -106,12 +106,30 @@ src/quantbots/
   llm/{client,health,bench}.py # local OpenAI-compatible client + Ollama watchdog + model benchmark
   config.py              # env/secret + bots.yaml/sources.yaml loading (merges sizing.DEFAULT_LIMITS)
   cli.py                 # `quantbots` entry point (health/refresh/ingest/run/status/resolve/snapshot/backtest/llm-bench)
+  dashboard/server.py    # Flask: serves web/dist bundle + JSON+SSE API at /api/*
+  dashboard/data.py      # read-only aggregations over the SQLite store
 config/bots.yaml         # per-bot: strategy, limits, account env var
 config/sources.yaml      # per-source: feed config
 scripts/manual_trade.py  # connection smoke test
 scripts/daily_cycle.sh   # ops: resolve -> refresh -> ingest -> run --live -> snapshot (all bots)
 scripts/com.quantbots.daily.plist  # launchd agent: run daily_cycle.sh at 09:00 daily
+web/                     # Vite + React 19 + TS + Tailwind v4 dashboard. `bun install && bun run build` → web/dist/, served by Flask at /.
 ```
+
+## Dashboard
+
+`quantbots dashboard` serves the React SPA from `web/dist/` plus a JSON+SSE API
+at `/api/*`. Pages: `/` (fleet leaderboard), `/bots/[name]` (detail + equity
+curve), `/feed` (live trade tape), `/strategies` + `/strategies/[name]`,
+`/markets`. The SSE channel `/api/stream` pushes a fresh snapshot every 5 s.
+
+Dev: `cd web && bun run dev` (Vite on :5173 proxies `/api/*` to Flask :8000).
+Build: `cd web && bun run build` (output: `web/dist/`).
+
+**Always read `DESIGN.md` before changing dashboard visuals.** It defines the
+Mission Control aesthetic — IBM Plex Mono+Sans, cyan signal accent, green/red
+PnL on a near-black surface — and the anti-slop rules (no purple gradients, no
+3-column SaaS icon grids, no Inter/Roboto). Deviations need explicit approval.
 
 ## How to add a bot (the only thing most authors do)
 

@@ -13,6 +13,8 @@ data/*.sqlite
 data/*.sqlite.bak-*
 data/*.db
 data/*.log
+# Minted bot-account credentials (api keys + passwords) — never commit.
+data/bot-accounts.json
 # Pair-research outputs — regenerable via `python scripts/research_pairs.py`.
 data/research/
 
@@ -21,3 +23,7 @@ data/research/
 build/
 dist/
 .gstack/
+# Live per-account performance baselines (contain account ids/balances).
+data/account-baseline-*.json
+data/dryrun-report-*.md
+data/*.live.log

@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+@theme {
+  /* ============================== */
+  /* Mission Control design tokens  */
+  /* ============================== */
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
+
+  /* surface scale (near-black, very slightly cool) */
+  --color-bg: #08090c;
+  --color-surface: #0e1015;
+  --color-surface-2: #14171e;
+  --color-surface-3: #1b1f28;
+  --color-border: #1e222b;
+  --color-border-strong: #2a2f3a;
+
+  /* text scale */
+  --color-text: #e8ecef;
+  --color-text-2: #b8bec8;
+  --color-text-3: #7a828f;
+  --color-text-muted: #4a5263;
+
+  /* signal accent */
+  --color-signal: #00d9ff;
+  --color-signal-dim: #0099b8;
+  --color-signal-bg: #003848;
+
+  /* semantic */
+  --color-positive: #00c896;
+  --color-positive-dim: #008f6b;
+  --color-negative: #ff5c5c;
+  --color-negative-dim: #c44343;
+  --color-warn: #ffb740;
+  --color-warn-dim: #b88029;
+  --color-neutral: #7a828f;
+
+  /* radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* shadows */
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+
+  /* animations */
+  --animate-pulse-signal: pulse-signal 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-flicker: flicker 150ms ease-out;
+}
+
+@keyframes pulse-signal {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 217, 255, 0.5); }
+  70%      { box-shadow: 0 0 0 6px rgba(0, 217, 255, 0); }
+}
+
+@keyframes flicker {
+  0%   { color: var(--color-text); filter: brightness(1); }
+  40%  { color: var(--color-signal); filter: brightness(1.4); }
+  100% { color: var(--color-text); filter: brightness(1); }
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    /* Geist ships with its own optical adjustments; no ligature feature flags. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: var(--color-signal-bg);
+    color: var(--color-signal);
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+}
+
+@layer utilities {
+  .font-mono, .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero";
+  }
+  .label-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-3);
+    font-family: var(--font-mono);
+  }
+  .hairline {
+    border-color: var(--color-border);
+  }
+  .hairline-strong {
+    border-color: var(--color-border-strong);
+  }
+  .ring-signal {
+    box-shadow: 0 0 0 1px var(--color-signal);
+  }
+}

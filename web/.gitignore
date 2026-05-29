@@ -1,0 +1,13 @@
+# Dependencies — restored via `bun install`.
+node_modules/
+
+# Build output — regenerated via `bun run build` (Flask serves web/dist/).
+dist/
+
+# TypeScript incremental build caches.
+*.tsbuildinfo
+
+# Local env / editor cruft.
+.env
+.env.local
+.DS_Store

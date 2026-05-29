@@ -132,6 +132,35 @@ class ManifoldClient:
         call — a 200 proves both the API key and Cloudflare Access work."""
         return self._request("GET", "me")
 
+    def get_portfolio(self, user_id: str | None = None) -> dict:
+        """Authoritative account economics, computed server-side by the clone.
+
+        Returns: {balance, investmentValue, totalDeposits, loanTotal,
+        dailyProfit, ...}. `investmentValue` is Manifold's own mark-to-market of
+        every open position at live prices — the number to trust for "Invested"
+        and for profit (balance + investmentValue − totalDeposits), rather than
+        recomputing it from a possibly-stale local price cache.
+
+        Omit `user_id` to use the authenticated account (one extra /me call).
+        """
+        if user_id is None:
+            user_id = self.get_me()["id"]
+        return self._request("GET", "get-user-portfolio", params={"userId": user_id})
+
+    def get_portfolio_history(
+        self, user_id: str | None = None, period: str = "allTime"
+    ) -> list[dict]:
+        """Time series of portfolio snapshots (each with a server-computed
+        `profit` field). `period` ∈ {daily, weekly, monthly, allTime}. Used to
+        draw the equity curve straight from Manifold instead of replaying the
+        local ledger."""
+        if user_id is None:
+            user_id = self.get_me()["id"]
+        return self._request(
+            "GET", "get-user-portfolio-history",
+            params={"userId": user_id, "period": period},
+        )
+
     def get_market(self, market_id: str) -> dict:
         return self._request("GET", f"market/{market_id}")
 

@@ -16,10 +16,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..config import BotConfig, load_bots
+from ..resolvability import resolvability_score
 from ..store.db import Store
 from ..store.pnl import bot_pnl, position_pnl
 from ..store.trades import group_positions, summarize_position, trades_for_bot
-from ..strategies import get_strategy
+from ..strategies import _REGISTRY, get_strategy
 
 PNL_EPS = 1e-6  # tolerance for win/loss/refund classification
 
@@ -205,18 +206,28 @@ def _bot_status_row(store: Store, cfg: BotConfig) -> dict[str, Any]:
 # Aggregations exposed to the templates
 # -----------------------------------------------------------------------------
 
-def overview(store: Store, account: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Aggregate totals across all bots.
+def overview(store: Store, portfolio: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Aggregate totals across the whole fleet.
 
-    If `account` is supplied (balance + totalDeposits from the live /me call),
-    we ALSO compute Manifold's "Profit" formula directly: (balance + mark) −
-    totalDeposits. That number should equal our sum-of-bot-PnLs to within a few
-    mana — if it doesn't, the cache is stale.
+    The fleet trades on a SINGLE Manifold account, so the headline economics —
+    profit, invested (mark-to-market), balance — are pulled DIRECTLY from the
+    clone's `get-user-portfolio` endpoint when `portfolio` is supplied, rather
+    than recomputed from the local ledger + (stale) price cache. Manifold's
+    numbers are authoritative:
+
+        active_capital = investmentValue        (server-side mark-to-market)
+        total_pnl      = balance + investmentValue − totalDeposits   (= profit)
+        roi            = total_pnl / totalDeposits
+
+    The per-bot breakdowns below stay ledger-derived (Manifold can't attribute a
+    shared account by bot). `ledger_*` fields expose what the ledger thinks so
+    operators can spot drift, but the displayed headline trusts Manifold.
     """
     rows = [_bot_status_row(store, cfg) for cfg in load_bots()]
     invested_cost = sum(r["invested"] for r in rows)
     invested_mark = sum(r["invested_mark"] for r in rows)
     pnl_sum = sum(r["pnl"] for r in rows)
+    realized_sum = sum(r["realized"] for r in rows)
     n_live = sum(1 for r in rows if r["status"] == "LIVE")
     n_trades_all = sum(r["n_trades_all"] for r in rows)
 
@@ -225,10 +236,10 @@ def overview(store: Store, account: dict[str, Any] | None = None) -> dict[str, A
         "n_enabled": sum(1 for r in rows if r["enabled"]),
         "n_live": n_live,
         "total_pnl": pnl_sum,
-        "total_realized": sum(r["realized"] for r in rows),
+        "total_realized": realized_sum,
         "total_unrealized": sum(r["unrealized"] for r in rows),
         "total_invested": invested_cost,        # historical cost basis (informational)
-        "active_capital": invested_mark,        # mark value of open positions (matches Manifold)
+        "active_capital": invested_mark,        # mark value of open positions
         "open_positions": sum(r["open"] for r in rows),
         "closed_positions": sum(r["closed"] for r in rows),
         "total_wins": sum(r["wins"] for r in rows),
@@ -239,18 +250,54 @@ def overview(store: Store, account: dict[str, Any] | None = None) -> dict[str, A
         "n_entries": sum(r["n_entries"] for r in rows),
         "roi": (pnl_sum / invested_cost) if invested_cost else None,
         "avg_pnl_per_trade": (pnl_sum / n_trades_all) if n_trades_all else 0.0,
+        "source": "ledger",                      # which numbers the headline trusts
     }
-    if account:
-        balance = account.get("balance") or 0
-        deposits = account.get("totalDeposits") or 0
-        account_profit = balance + invested_mark - deposits
+    if portfolio:
+        balance = portfolio.get("balance") or 0.0
+        deposits = portfolio.get("totalDeposits") or 0.0
+        invest_value = portfolio.get("investmentValue") or 0.0
+        account_profit = balance + invest_value - deposits
+        # Headline numbers now come straight from Manifold.
+        out["source"] = "manifold"
         out["account_balance"] = balance
         out["account_deposits"] = deposits
         out["account_profit"] = account_profit
-        # Drift between sum-of-bot-PnL and Manifold's true profit. A large drift
-        # almost always means the price cache is stale; small drift is rounding.
+        out["daily_profit"] = portfolio.get("dailyProfit")
+        out["active_capital"] = invest_value      # authoritative mark-to-market
+        out["total_pnl"] = account_profit          # authoritative profit
+        # Keep the realized/unrealized split consistent with the authoritative
+        # total: realized = settled cash (ledger), unrealized = the rest.
+        out["total_realized"] = realized_sum
+        out["total_unrealized"] = account_profit - realized_sum
+        out["roi"] = (account_profit / deposits) if deposits else None
+        # Preserve the ledger view for drift diagnostics (cache-staleness signal).
+        out["ledger_pnl"] = pnl_sum
+        out["ledger_active_capital"] = invested_mark
         out["pnl_drift"] = pnl_sum - account_profit
     return out
+
+
+def portfolio_equity(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Equity curve straight from Manifold's portfolio history.
+
+    Each snapshot already carries a server-computed `profit`
+    (= balance + investmentValue − totalDeposits) — we just map it to the
+    {ts, pnl} shape the chart expects. No ledger replay, no stale cache.
+    """
+    if not history:
+        return []
+    series = []
+    for h in history:
+        ts = h.get("timestamp")
+        if ts is None:
+            continue
+        try:
+            iso = datetime.fromtimestamp(int(ts) / 1000, UTC).isoformat()
+        except (ValueError, OSError, OverflowError):
+            continue
+        series.append({"ts": iso, "pnl": h.get("profit") or 0.0})
+    series.sort(key=lambda p: p["ts"])
+    return series
 
 
 def cache_age_seconds(store: Store) -> int | None:
@@ -418,6 +465,151 @@ def event_feed(store: Store, limit: int = 50) -> list[dict[str, Any]]:
 # -----------------------------------------------------------------------------
 # Formatting helpers used in templates
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Endpoints added for the React dashboard
+# -----------------------------------------------------------------------------
+
+def strategy_index(store: Store) -> list[dict[str, Any]]:
+    """One row per *strategy* (not per bot). Aggregates bots that use it."""
+    rows = [_bot_status_row(store, cfg) for cfg in load_bots()]
+    by_strategy: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        s = r["strategy"]
+        agg = by_strategy.setdefault(s, {
+            "name": s,
+            "class": STRATEGY_CLASS.get(s, "Other"),
+            "description": "",
+            "bots": [],
+            "total_pnl": 0.0,
+            "total_trades": 0,
+            "live_count": 0,
+        })
+        agg["bots"].append(r["name"])
+        agg["total_pnl"] += r["pnl"]
+        agg["total_trades"] += r["n_trades_all"]
+        if r["status"] == "LIVE":
+            agg["live_count"] += 1
+        if not agg["description"]:
+            agg["description"] = r.get("description") or ""
+    # Surface registered strategies even if no bot uses them yet — operators
+    # often want to see what's available before wiring it up.
+    for name in _REGISTRY:
+        if name in by_strategy:
+            continue
+        try:
+            desc = get_strategy(name).description
+        except Exception:  # noqa: BLE001
+            desc = ""
+        by_strategy[name] = {
+            "name": name,
+            "class": STRATEGY_CLASS.get(name, "Other"),
+            "description": desc,
+            "bots": [],
+            "total_pnl": 0.0,
+            "total_trades": 0,
+            "live_count": 0,
+        }
+    out = list(by_strategy.values())
+    out.sort(key=lambda x: (-x["total_pnl"], x["name"]))
+    return out
+
+
+def strategy_detail(store: Store, name: str) -> dict[str, Any] | None:
+    for row in strategy_index(store):
+        if row["name"] == name:
+            return row
+    return None
+
+
+def markets_index(
+    store: Store,
+    *,
+    page: int = 1,
+    size: int = 50,
+    q: str | None = None,
+    min_resolvability: float | None = None,
+) -> dict[str, Any]:
+    """Paginated cached-market browser.
+
+    Returns rows: question, type, current_prob, close_time, total_liquidity,
+    resolvability score, and which bots currently hold a position. `q` filters
+    by case-insensitive substring against the question + market_id.
+    """
+    page = max(1, int(page or 1))
+    size = max(1, min(int(size or 50), 200))
+
+    # Pull (id, question, prob, liquidity, close, raw) — we don't filter on
+    # is_resolved so operators can audit settled rows too.
+    where: list[str] = []
+    args: list[Any] = []
+    if q:
+        where.append("(LOWER(question) LIKE ? OR LOWER(market_id) LIKE ?)")
+        like = f"%{q.lower()}%"
+        args.extend([like, like])
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    # Count first (small SQL hit).
+    total_row = store.conn.execute(
+        f"SELECT COUNT(*) AS c FROM market_cache {where_sql}", args
+    ).fetchone()
+    total = int(total_row["c"]) if total_row else 0
+
+    rows = store.conn.execute(
+        f"SELECT market_id, question, probability, total_liquidity, close_time, "
+        f"raw_json FROM market_cache {where_sql} "
+        f"ORDER BY total_liquidity DESC NULLS LAST, market_id "
+        f"LIMIT ? OFFSET ?",
+        [*args, size, (page - 1) * size],
+    ).fetchall()
+
+    # traded_by: bots that currently have an open position on each market.
+    # One query per page is cheap enough (size ≤ 200).
+    market_ids = [r["market_id"] for r in rows]
+    by_market: dict[str, list[str]] = {mid: [] for mid in market_ids}
+    if market_ids:
+        ph = ",".join("?" for _ in market_ids)
+        for tr in store.conn.execute(
+            f"SELECT DISTINCT b.name, t.market_id FROM trade t "
+            f"JOIN bot b USING(bot_id) WHERE t.market_id IN ({ph})",
+            market_ids,
+        ).fetchall():
+            by_market[tr["market_id"]].append(tr["name"])
+
+    out_rows = []
+    import json as _json
+    for r in rows:
+        raw = r["raw_json"]
+        kind = ""
+        if raw:
+            try:
+                obj = _json.loads(raw) if isinstance(raw, str) else raw
+                kind = (obj or {}).get("outcomeType") or (obj or {}).get("mechanism") or ""
+            except Exception:  # noqa: BLE001
+                kind = ""
+        score = resolvability_score(r["question"] or "")
+        if min_resolvability is not None and score < float(min_resolvability):
+            continue
+        close_iso = None
+        if r["close_time"]:
+            try:
+                # close_time is unix ms in the Manifold API.
+                close_iso = datetime.fromtimestamp(int(r["close_time"]) / 1000, UTC).isoformat()
+            except Exception:  # noqa: BLE001
+                close_iso = None
+        out_rows.append({
+            "id": r["market_id"],
+            "question": r["question"] or "",
+            "market_type": kind or "—",
+            "current_prob": r["probability"],
+            "close_time": close_iso,
+            "total_liquidity": r["total_liquidity"],
+            "resolvability": score,
+            "traded_by": by_market.get(r["market_id"], []),
+        })
+
+    return {"rows": out_rows, "total": total, "page": page, "size": size}
+
 
 def humanize_age(iso_ts: str | None) -> str:
     if not iso_ts:
