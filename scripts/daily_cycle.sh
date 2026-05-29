@@ -18,7 +18,8 @@ LIVE_FLAG="--live"
 [ "${QUANTBOTS_LIVE:-1}" = "0" ] && LIVE_FLAG=""
 
 # Bots to run each cycle, in priority order. Add new bot names here as they ship.
-BOTS=("commodity_spot_1" "ladder_arb_1" "term_structure_1")
+BOTS=("commodity_spot_1" "ladder_arb_1" "term_structure_1" \
+      "stockpile_facts_1" "stockpile_grid_arb_1" "stockpile_coherence_1")
 
 cd "$REPO" || exit 1
 # shellcheck disable=SC1090

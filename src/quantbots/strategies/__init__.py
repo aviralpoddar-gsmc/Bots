@@ -20,8 +20,12 @@ _REGISTRY: dict[str, str] = {
     "enso": "quantbots.strategies.enso:EnsoStrategy",
     "commodity_futures": "quantbots.strategies.commodity_futures:CommodityFuturesStrategy",
     "commodity_spot": "quantbots.strategies.commodity_spot:CommoditySpotStrategy",
+    "pair_trading": "quantbots.strategies.pair_trading:PairTradingStrategy",
     "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
     "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",
+    "stockpile_facts": "quantbots.strategies.stockpile_facts:StockpileFactsStrategy",
+    "stockpile_grid_arb": "quantbots.strategies.stockpile_grid_arb:StockpileGridArbStrategy",
+    "stockpile_coherence": "quantbots.strategies.stockpile_coherence:StockpileCoherenceStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

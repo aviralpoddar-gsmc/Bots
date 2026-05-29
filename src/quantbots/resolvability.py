@@ -47,11 +47,33 @@ _STRONG_SRC = re.compile(
 # LBMA precious metals — essentially always resolve.
 _PRECIOUS = re.compile(r"\b(gold|silver|platinum|palladium)\b", re.I)
 
+# U.S. strategic-materials FACT markets. These don't resolve off a commodity feed
+# but off a government publication, so the price/production heuristics below would
+# misclassify them. Handled up front, ordered by how cleanly the source publishes:
+#   - USGS Critical Minerals list: Federal Register, statutory cadence -> resolves.
+#   - NDS holdings: DLA report exists but specific holdings partly classified -> medium.
+#   - buffer-stock procurement: a policy announcement -> low-ish.
+#   - "vault procurement ... kg" / "Project Vault": a quantity figure with no clear
+#     public reporting line -> production-like, ~never resolves.
+_CRIT_LIST = re.compile(r"\bcritical minerals list\b", re.I)
+_NDS_HOLD = re.compile(r"\bnational defense stockpile\b.*\bposition\b", re.I)
+_BUFFER = re.compile(r"\bbuffer[- ]stock procurement\b", re.I)
+_VAULT_QTY = re.compile(r"\b(vault procurement|project vault)\b", re.I)
+
 
 def resolvability_score(question: str) -> float:
     """Estimate P(this market resolves YES/NO rather than CANCEL), in [0.01, 0.99],
     from the question text. Calibrated to observed decided-rates."""
     q = question or ""
+    # Strategic-materials fact/policy markets — resolve off a government publication.
+    if _CRIT_LIST.search(q):
+        return 0.90
+    if _NDS_HOLD.search(q):
+        return 0.35
+    if _BUFFER.search(q):
+        return 0.10
+    if _VAULT_QTY.search(q):
+        return 0.03
     # Operational metrics dominate: even if a price word appears, these cancel.
     if _OPERATIONAL.search(q):
         base = 0.02

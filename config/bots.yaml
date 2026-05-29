@@ -33,7 +33,7 @@ bots:
   # gap. Run `quantbots ingest` first so there's data to fuse.
   - name: ensemble_1
     strategy: ensemble
-    account_env: MANIFOLD_CLONE_API_KEY
+    account_env: ENSEMBLE_1_API_KEY   # own account: @EnsembleBot
     enabled: true
     limits:
       max_order_size: 25
@@ -75,7 +75,7 @@ bots:
   # on FRED daily history: Brier skill +0.10..+0.29, win 77-84%, simulated ROI +57..71%.
   - name: commodity_spot_1
     strategy: commodity_spot
-    account_env: MANIFOLD_CLONE_API_KEY
+    account_env: COMMODITY_SPOT_1_API_KEY   # own account: @CommoditySpotBot
     enabled: true
     limits:
       # Size to liquidity and only NUDGE prices — scale comes from breadth (many
@@ -106,13 +106,56 @@ bots:
         BRENT_OIL: 0.39
         GASOLINE: 0.45
 
+  # Convergence overlay: commodity_spot's lognormal + a mean-reversion drift from
+  # a currently-dislocated cointegrated pair (β / spread / OU half-life fit by the
+  # research layer from cached yfinance history). Fires only on legs of pairs
+  # stretched past entry_z — bets the rich leg down, the cheap leg up. Requires
+  # the `research` extra. Shares commodity_spot's strict unit/price guards, so it
+  # only ever touches genuine, resolvable spot-price strikes.
+  # NOTE: enabled:false until a human confirms go-live — daily_cycle.sh runs every
+  # enabled bot --live. Validate first: `quantbots run --bot pair_trading_1` (dry-run).
+  # Overlaps commodity_spot_1 on the same legs (it's a drift-tilted refinement);
+  # consider a separate account or disabling commodity_spot on dislocated legs.
+  - name: pair_trading_1
+    strategy: pair_trading
+    account_env: PAIR_TRADING_1_API_KEY   # own account: @PairTradingBot
+    enabled: false
+    limits:
+      max_order_size: 75       # per-market hard ceiling
+      liquidity_pct: 0.25      # primary size driver: at most 1/4 of a market's liquidity
+      max_price_impact: 0.05   # never move a single market's price >5 points per run
+      hold_band: 0.05
+      max_run_budget: 30000    # liquidity/impact caps govern size, not the budget
+      per_group_pct: 0.40      # focused book (few dislocated pairs) -> allow more per commodity
+      min_ev: 0.05             # only fund orders with >5% expected profit per mana
+      min_resolvability: 0.04  # belt-and-braces; legs are already resolvable metals/energy
+      dry_run_sample: 25
+      max_total_exposure: 12000   # ~3% of balance across all pair_trading positions
+      max_group_exposure: 4000    # cap per commodity
+    params:
+      entry_z: 1.5             # only trade a leg when its pair is dislocated past this
+      reversion_capture: 0.5   # fraction of modelled reversion attributed to the priced leg
+      max_half_life_days: 90   # ignore pairs that revert too slowly to matter
+      min_abs_corr: 0.4        # drop spurious (low-correlation) "mean-reverters"
+      period: 3y               # yfinance history window for the cointegration fit
+      lookback_days: 750       # business-day window after alignment
+      vols:                    # marginal annual vols (shared with commodity_spot)
+        GOLD: 0.16
+        SILVER: 0.30
+        PLATINUM: 0.22
+        PALLADIUM: 0.30
+        COPPER: 0.21
+        WTI_OIL: 0.40
+        BRENT_OIL: 0.39
+        GASOLINE: 0.45
+
   # Structural arbitrage: model-free monotonicity coherence across ALL numeric
   # ladders (domain-agnostic — production, demand, price, spread, ...). Trades the
   # ~2k ladders with provable monotonicity violations toward an isotonic-fit fair
   # value. Gentle, liquidity-aware sizing; per-ladder concentration caps.
   - name: ladder_arb_1
     strategy: ladder_arb
-    account_env: MANIFOLD_CLONE_API_KEY
+    account_env: LADDER_ARB_1_API_KEY   # own account: @LadderArbBot
     enabled: true
     limits:
       max_order_size: 50
@@ -137,7 +180,7 @@ bots:
   # axis to ladder_arb (which works across thresholds on one date).
   - name: term_structure_1
     strategy: term_structure
-    account_env: MANIFOLD_CLONE_API_KEY
+    account_env: TERM_STRUCTURE_1_API_KEY   # own account: @TermStructureBot
     enabled: true
     limits:
       max_order_size: 50
@@ -158,6 +201,85 @@ bots:
       min_dates: 3
       min_anchors: 2
       skip_extreme: 0.02
+
+  # === U.S. strategic-materials market family (3 bots, disjoint ownership) ===
+
+  # #1 Reference-lookup FACT bot: prices "on the Critical Minerals list" off the
+  # USGS 2022 list (sticky, statutory) and "NDS holds a position" off documented
+  # DLA/GAO holdings — high conviction where the market sits at a coin-flip but the
+  # published fact is known; abstains where the record is ambiguous. The real alpha
+  # of the three (genuine resolvability + 36-40pt edges). Curated tables in
+  # stockpile_facts.py — refresh when USGS/DLA publish.
+  - name: stockpile_facts_1
+    strategy: stockpile_facts
+    account_env: STOCKPILE_FACTS_1_API_KEY   # own account: @StockpileFactsBot
+    enabled: true
+    limits:
+      # These are high-conviction FACT bets (40pt gaps) on thin seeded markets, so
+      # we push hard toward fair value rather than nudge. max_price_impact is large
+      # so the 1/3-per-run sizing (not the impact cap) governs; repeated daily runs
+      # converge each market and min_ev/hold_band stop them at fair value.
+      max_order_size: 200
+      liquidity_pct: 0.50
+      max_price_impact: 0.40     # was 0.05 — that throttled orders to ~Ṁ5 on liq-100 markets
+      hold_band: 0.05
+      max_run_budget: 30000
+      per_group_pct: 0.20
+      min_ev: 0.05               # stops pushing once realized edge (paper×resolvability) thins
+      min_resolvability: 0.04    # NDS=0.35, list=0.90 both clear this; nothing else trades
+      dry_run_sample: 25
+      max_total_exposure: 25000    # room to fully fund all ~22 markets to fair value
+      max_group_exposure: 3000     # cap per metal
+
+  # #2 Vault kg-ladder 2-D structural arb (↓ strike, ↑ expiry). Cancel-safe: these
+  # quantity markets resolve ~never (resolvability 0.03), so realized EV is small —
+  # deployed as a small free option that activates when traders dislocate a grid.
+  # hold_band gates on a >5pt deviation; min_resolvability 0 lets it act despite
+  # low resolution odds; tiny caps bound the tied-up (refundable) capital.
+  - name: stockpile_grid_arb_1
+    strategy: stockpile_grid_arb
+    account_env: STOCKPILE_GRID_ARB_1_API_KEY   # own account: @StockpileGridArbBot
+    enabled: true
+    limits:
+      max_order_size: 30
+      liquidity_pct: 0.20
+      max_price_impact: 0.05
+      hold_band: 0.05            # only trade strikes off the surface by >5pts
+      max_run_budget: 5000
+      per_group_pct: 0.10
+      min_ev: 0.0               # cancel-safe arb: refund downside, so low realized EV is fine
+      min_resolvability: 0.0    # do NOT filter on the ~0.03 resolvability here
+      dry_run_sample: 25
+      max_total_exposure: 3000     # small: capital is mostly refunded, opportunity-cost only
+      max_group_exposure: 500
+    params:
+      dev_band: 0.03
+      informative_weight: 5.0
+      min_nodes: 4
+
+  # #3 Cross-template TIME-coherence on cumulative "by-date" markets (Project-Vault
+  # inclusion + buffer-stock). Hard monotonicity (PAVA): a cumulative event can't
+  # get less likely later. Same cancel-safe small-option profile as #2.
+  - name: stockpile_coherence_1
+    strategy: stockpile_coherence
+    account_env: STOCKPILE_COHERENCE_1_API_KEY   # own account: @StockpileCoherenceBot
+    enabled: true
+    limits:
+      max_order_size: 30
+      liquidity_pct: 0.20
+      max_price_impact: 0.05
+      hold_band: 0.05
+      max_run_budget: 5000
+      per_group_pct: 0.10
+      min_ev: 0.0
+      min_resolvability: 0.0
+      dry_run_sample: 25
+      max_total_exposure: 3000
+      max_group_exposure: 500
+    params:
+      dev_band: 0.03
+      informative_weight: 5.0
+      min_dates: 3
 
   # Local-LLM bot (requires the `llm` extra + a running local model).
   # Trades the long tail the deterministic bots can't link, by reasoning about the
