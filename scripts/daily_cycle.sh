@@ -19,7 +19,8 @@ LIVE_FLAG="--live"
 
 # Bots to run each cycle, in priority order. Add new bot names here as they ship.
 BOTS=("commodity_spot_1" "ladder_arb_1" "term_structure_1" \
-      "stockpile_facts_1" "stockpile_grid_arb_1" "stockpile_coherence_1")
+      "stockpile_facts_1" "stockpile_grid_arb_1" "stockpile_coherence_1" "pair_trading_1" \
+      "cotton_fundamental_1" "cftc_softs_1" "weather_cocoa_1" "nass_cotton_1")
 
 cd "$REPO" || exit 1
 # shellcheck disable=SC1090
@@ -37,6 +38,7 @@ log "=== quantbots daily cycle start (live=${QUANTBOTS_LIVE:-1}) ==="
 #    per open position. Stale cache here means missed resolutions.
 run quantbots refresh --limit 70000 || log "refresh failed (continuing with stale cache)"
 run quantbots ingest || log "ingest failed (continuing with stale feeds)"
+run quantbots process || log "process failed (continuing without fresh signals)"
 
 # 2. Realize PnL on positions whose markets resolved (per bot). Reads from cache.
 for bot in "${BOTS[@]}"; do

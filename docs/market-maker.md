@@ -1,7 +1,33 @@
 # Market-Maker bot — design
 
-> Status: **design / not yet built.** This maps out what the market-maker will do
-> and how it fits the framework, so we can productionize it deliberately.
+> ## ⚖️ Verdict (2026-06-01): BUILT & WORKS, but SHELVED — marginal value on this platform
+> The maker is mechanically complete and live-verified (Phases 0–2 + canary + Phase 4
+> maker-mode). But measured against live data, **both of its value levers are near-nil here**:
+> - **Spread capture: 0.** Of 5 canary fills, 0 came from a real counterparty
+>   (`matchedBetId` set) — 100% were AMM crossings. The clone has no organic two-sided
+>   flow to make a market *for*; resting quotes sat unhit. A maker can't earn a spread
+>   nobody trades against.
+> - **Better execution: ≤1.2% of stake.** commodity_spot_1's 1,503 market-order fills
+>   move price only ~2pts mean (median 1.3, mana-wtd 2.4), ≈1.22% slippage vs mid —
+>   because it already sizes to liquidity and caps impact at 5pts. Limit-capped maker
+>   execution would save a fraction of that.
+>
+> **Recommendation:** keep the code (it's reusable, reviewed infra) but leave
+> `market_maker_1` `enabled:false`; do NOT add it to daily_cycle, do NOT flip
+> commodity_spot_1 to maker-mode, do NOT build Phase 3 — the platform doesn't reward
+> any of it. Revisit only if the clone develops real trader flow. The lasting win from
+> this effort is the verified client primitives (limit TTL/cancel/open-order listing)
+> and the `maker:true` runner mode, available if ever needed.
+
+
+> Status: **Phase 2 built — standalone v1 maker (2026-06-01).** Phase 0 verified
+> the clone's limit-order behavior; Phase 1 added the client primitives; Phase 2
+> ships the `market_maker` strategy + `maker.run_maker` execution path (reconcile
+> loop, diversified two-sided quoting, inventory + group + exposure caps), the
+> `quantbots make` CLI, and `market_maker_1` in bots.yaml (enabled:false). Adversarially
+> reviewed (14 findings fixed); 183 tests green; live dry-run clean. NOT YET LIVE:
+> mint @MarketMakerBot, then a small --live canary. Phase 3 = price skew +
+> toxic-flow widening + maker-mode-on-runner.
 
 ## Why it exists (the role it fills)
 
@@ -100,17 +126,26 @@ explicit cancel call, **post every quote with a TTL** and re-quote each cycle:
 This avoids needing order cancellation for v1. Active management (cancel + re-post
 intraday) is a later optimization.
 
-### Client prerequisites (must add before building)
+> **Verified live (2026-06-01):** the clone honors `expiresMillisAfter` via a
+> periodic expiry **sweep** (a 60s-TTL probe order expired between t=78s and
+> t=150s), i.e. an order clears within ~1–2 min *past* its nominal `expiresAt`,
+> not instantly. Negligible at a 25h TTL, so the self-expiry plan holds. Reserved
+> mana is refunded on both expiry and cancel (probe balance returned to baseline).
 
-The clone client supports `limitProb` but **not** order expiry or cancellation. Add:
+### Client prerequisites — ✅ BUILT & VERIFIED (Phase 1, 2026-06-01)
 
-- `expires_millis_after` (and/or `expires_at`) param on `place_bet` / `batch_bet`
-  → the TTL above. **Required for v1.**
-- *(optional, for active management)* `cancel_bet(bet_id)` and a way to list open
-  unfilled limit orders (`get_bets(kinds="open-limit")` or equivalent).
+The clone client supported `limitProb` but not order expiry or cancellation.
+Added to `manifold/client.py` and verified live against the clone:
 
-Verify the clone honors these (it's a Manifold fork; upstream supports
-`expiresMillisAfter` on bets and `POST /bet/cancel/:id`).
+- `place_bet(..., expires_millis_after=, expires_at=)` — TTL params (integer ms),
+  limit-order-only. **Verified:** `expiresAt = createdTime + expires_millis_after`.
+- `batch_bet` — now documents the `expiresMillisAfter`/`expiresAt`/`limitProb`
+  pass-through so both quote legs post in one call.
+- `cancel_bet(bet_id)` — `POST bet/cancel/:betId` (the **bet** id, not contract id).
+  **Verified:** primary path works; cancelled order reads `isCancelled=True`.
+- `get_open_limit_orders(market_id=, user_id=)` — wraps
+  `get_bets(userId, kinds="open-limit")`. **Verified:** returns resting orders
+  with `orderAmount` (total) / `amount` (filled-so-far) / `isFilled` / `fills`.
 
 ## Risk controls (non-negotiable)
 
@@ -174,10 +209,66 @@ markets it quotes.
     neutral_fallback: false       # v1: only quote where the source has a view
 ```
 
-## Open questions to resolve before building
+## Phase 0 findings — answered live (2026-06-01)
 
-1. Does the clone honor `expiresMillisAfter` / `bet/cancel`? (verify against the API)
-2. Fees/rebates on limit orders — do they change `min_spread`?
-3. Does the AMM auto-fill limit orders as the pool price crosses them, or only
-   against incoming taker orders? (affects fill dynamics and convergence speed)
-4. Maker-mode-on-runner vs standalone strategy for v1 (recommend standalone first).
+Probed on `@CommoditySpotBot` against gold market `pq0IhPdlAh` with self-cleaning
+M$1 orders. Original open questions, now resolved:
+
+1. **Honors `expiresMillisAfter` / `bet/cancel`?** ✅ Both. Expiry via a periodic
+   sweep (~1–2 min lag past `expiresAt`); cancel via `POST bet/cancel/:betId`
+   (primary path, no fallback needed). Refunds reserved mana.
+2. **Fees/rebates on limit orders?** None observed — `creatorFee`, `platformFee`,
+   `liquidityFee` were all `0` on both resting and crossing-fill responses. So
+   `min_spread` is governed by adverse selection, not fees (but re-confirm on a
+   real two-sided fill before trusting at scale).
+3. **Auto-fill as the pool price crosses?** ✅ Yes — a crossing limit fills
+   immediately against the AMM (`fills[].matchedBetId = None`) and walks the price
+   **up to but not past** its `limitProb` (e.g. limit 0.67 → probAfter 0.619). A
+   resting limit far from price stays unfilled (`amount=0, shares=0, fills=[]`).
+   This is exactly the convergence dynamic the maker relies on.
+
+## Remaining open questions
+
+1. ~~Maker-mode-on-runner vs standalone for v1~~ → **standalone shipped** (Phase 2).
+2. Confirm zero-fee on a real **two-sided round-trip fill** (the probe only saw
+   resting + crossing, not a maker round-trip) — verify on the first live canary.
+3. ~~Reserved-mana accounting~~ → **done**: `run_maker` subtracts resting
+   `orderAmount` (via `get_open_limit_orders`) and net filled inventory from the
+   `max_total_exposure` headroom each cycle.
+
+## Phase 2 — what shipped (v1)
+
+- `strategies/market_maker.py` — `MarketMakerStrategy` wraps a fair-value source
+  (default `commodity_spot`), delegating prefilter/estimate/correlation; adds
+  `half_spread` and the maker params.
+- `maker.py` — `run_maker`: reconcile fills (over open-orders ∪ inventory ∪ recent
+  bets, so no orphaned market leaks), net-exposure budget, diversified breadth
+  selection, two-sided quoting with per-group + inventory + per-leg-spread caps,
+  cancel-then-repost (repost only fully-cleared markets), fills-only ledger writes.
+- `quantbots make --bot NAME` (dry-run default), `market_maker_1` in bots.yaml.
+- Adversarial review fixed: orphaned-market reconcile/cancel, cancel-failure
+  double-stack, two-sided resolution (`open_position_legs` + per-leg
+  `sync_resolutions`), gross→net exposure, reserved-mana budget, group caps,
+  budget `continue`-not-`break`, near-boundary spread squash, honest leg counts.
+
+### Go-live checklist (→ live)  — Phases 0–2 + canary DONE 2026-06-01
+1. ~~Mint `@MarketMakerBot` + `MARKET_MAKER_1_API_KEY`~~ ✅ done (Doppler dev/stg/prd).
+2. ~~`quantbots run --bot market_maker_1` (dry-run) — quotes + 0 errors~~ ✅.
+3. ~~Tiny `--live` canary; verify fills reconcile~~ ✅ (idempotent, both legs handled).
+4. To fully deploy: flip `enabled: true` and add `market_maker_1` to the existing
+   `BOTS=(...)` array in `scripts/daily_cycle.sh`. **No separate `make` step** —
+   `quantbots run` auto-routes maker-mode bots, and the resolve loop already closes
+   both legs via `open_position_legs`. Before that: disable `commodity_spot_1` on
+   the overlapping legs (or flip it to `maker: true` and retire this bot) so the two
+   don't double-stack the same view.
+
+## Phase 4 — maker mode on the runner (built 2026-06-01)
+
+`maker: true` on ANY bot switches execution only: `quantbots run` auto-routes it to
+the maker path, wrapping the bot's own `strategy` as the fair-value source (knobs
+from `limits`). No wrapper strategy, no separate bot — any calibrated anchor
+becomes a liquidity provider on its own account. `market_maker_1` now ships as
+`strategy: commodity_spot` + `maker: true`. The end-state (Phase 4 fully realized)
+is to set `maker: true` on `commodity_spot_1` itself, retiring the dedicated MM bot
+and eliminating overlap. Remaining: price skew + toxic-flow widening (Phase 3
+risk controls), measure real (non-AMM) counterparty fills before scaling.

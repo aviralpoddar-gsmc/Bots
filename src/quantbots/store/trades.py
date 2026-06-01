@@ -96,10 +96,29 @@ def summarize_position(position_trades: list[dict]) -> dict[str, Any]:
 
 
 def open_positions(conn: sqlite3.Connection, bot_id: int) -> dict[str, dict]:
-    """{market_id: summary} for OPEN positions only (keyed by market for the runner)."""
+    """{market_id: summary} for OPEN positions only (keyed by market for the runner).
+
+    Taker bots hold one direction per market, so market-keying is unambiguous for
+    them. A two-sided bot (the market-maker) can hold YES and NO on one market;
+    this view collapses them (last direction wins) — such callers must use
+    `open_position_legs` instead. See sync_resolutions."""
     out: dict[str, dict] = {}
     for (_mid, _dir), pos_trades in group_positions(trades_for_bot(conn, bot_id)).items():
         summary = summarize_position(pos_trades)
         if summary["status"] == "OPEN":
             out[summary["market_id"]] = summary
+    return out
+
+
+def open_position_legs(conn: sqlite3.Connection, bot_id: int) -> dict[tuple[str, str], dict]:
+    """{(market_id, direction): summary} for OPEN positions, keyed per leg.
+
+    Every leg is distinct, so a market with both a YES and a NO position yields
+    two entries. Resolution and exposure code that must see every leg (the maker
+    quotes two-sided) uses this instead of the market-keyed `open_positions`."""
+    out: dict[tuple[str, str], dict] = {}
+    for (mid, direction), pos_trades in group_positions(trades_for_bot(conn, bot_id)).items():
+        summary = summarize_position(pos_trades)
+        if summary["status"] == "OPEN":
+            out[(mid, direction)] = summary
     return out

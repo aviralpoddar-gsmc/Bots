@@ -76,6 +76,12 @@ DEFAULT_BOTS: dict[str, tuple[str, str]] = {
     "stockpile_facts_1": ("StockpileFactsBot", "Stockpile Facts Bot (AP)"),
     "stockpile_grid_arb_1": ("StockpileGridArbBot", "Stockpile Grid Arb Bot (AP)"),
     "stockpile_coherence_1": ("StockpileCoherenceBot", "Stockpile Coherence Bot (AP)"),
+    "market_maker_1": ("MarketMakerBot", "Market Maker Bot (AP)"),
+    # USDA softs bots. cotton already minted as @Cottonfundamental1 (display renamed
+    # to add the "(AP)" suffix via POST /v0/me/update); listed here for consistency.
+    "cotton_fundamental_1": ("Cottonfundamental1", "Cotton Fundamental 1 (AP)"),
+    "cocoa_fundamental_1": ("CocoaFundamentalBot", "Cocoa Fundamental Bot (AP)"),
+    "coffee_consumption_1": ("CoffeeConsumptionBot", "Coffee Consumption Bot (AP)"),
 }
 
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "bot-accounts.json"
@@ -119,8 +125,10 @@ def main() -> None:
     ap.add_argument("--execute", action="store_true", help="Actually create accounts (else validate + stop)")
     args = ap.parse_args()
 
+    # Fallback naming for bots not in DEFAULT_BOTS: append the "(AP)" suffix so
+    # every minted account is tagged as an operator bot (the convention).
     bots = (
-        {n: DEFAULT_BOTS.get(n, (n.replace("_", "").title(), n.replace("_", " ").title()))
+        {n: DEFAULT_BOTS.get(n, (n.replace("_", "").title(), n.replace("_", " ").title() + " (AP)"))
          for n in args.bots.split(",") if n}
         if args.bots
         else dict(DEFAULT_BOTS)

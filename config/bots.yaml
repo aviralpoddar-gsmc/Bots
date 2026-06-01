@@ -119,7 +119,7 @@ bots:
   - name: pair_trading_1
     strategy: pair_trading
     account_env: PAIR_TRADING_1_API_KEY   # own account: @PairTradingBot
-    enabled: false
+    enabled: true
     limits:
       max_order_size: 75       # per-market hard ceiling
       liquidity_pct: 0.25      # primary size driver: at most 1/4 of a market's liquidity
@@ -297,3 +297,189 @@ bots:
       spread_mult: 1.25   # less widening needed than 8b (32b is better calibrated)
       conf_cap: 0.75      # never bet >75% conviction (obscure markets -> hallucination risk)
       max_groups: 12      # cap LLM calls per run (~50s each on 32b)
+
+  # === Market-maker (maker MODE — Phase 4) ===
+  # `maker: true` switches EXECUTION only: instead of taker market orders, the
+  # runner posts two-sided RESTING limit quotes around this bot's own fair value
+  # (here commodity_spot's), with fill reconciliation. Any calibrated anchor becomes
+  # a liquidity provider on its own account by adding `maker: true` — no wrapper
+  # strategy, no separate bot. `quantbots run --bot market_maker_1` auto-routes to
+  # the maker path. Maker knobs live in `limits`. See docs/market-maker.md.
+  # NOTE: enabled:false + NOT in daily_cycle.sh until a human confirms go-live.
+  # Live-canary verified 2026-06-01 (@MarketMakerBot). Overlaps commodity_spot_1 on
+  # the same legs — disable commodity_spot on dislocated legs before full deploy, or
+  # flip commodity_spot_1 itself to maker:true and retire this bot.
+  - name: market_maker_1
+    strategy: commodity_spot      # the fair-value source (the anchor itself)
+    account_env: MARKET_MAKER_1_API_KEY   # own account: @MarketMakerBot
+    enabled: false
+    maker: true                   # execute as a maker (limit-capped resting quotes)
+    limits:
+      max_order_size: 50       # per-leg hard ceiling
+      liquidity_pct: 0.25      # size each leg to <=1/4 of market liquidity
+      min_order_mana: 5
+      min_resolvability: 0.04  # only quote markets that actually settle YES/NO
+      max_run_budget: 5000     # max mana reserved across all quotes per cycle
+      max_total_exposure: 10000  # cap cumulative FILLED inventory mana (~3% of balance)
+      per_group_pct: 0.30      # no single commodity gets >30% of the cycle reserve
+      max_group_exposure: 2000   # hard mana cap on quotes per commodity
+      dry_run_sample: 25
+      # --- maker execution knobs ---
+      half_spread: 0.04        # quote at fair ± 4 points
+      min_half_spread: 0.02    # never tighter than 2 points (whole-percent floor)
+      inventory_cap: 200       # |net YES shares| per market before one-sided quoting
+      quote_ttl_hours: 25      # TTL backstop (slightly over daily cadence)
+      max_markets: 10          # breadth cap: quote the 10 most liquid priced markets
+    params:                    # forwarded to the commodity_spot source — use the
+      min_vol: 0.05            # SAME calibrated vols as commodity_spot_1 so the
+      vols:                    # maker prices off the tuned model, not catalog defaults
+        GOLD: 0.16
+        SILVER: 0.30
+        PLATINUM: 0.22
+        PALLADIUM: 0.30
+        COPPER: 0.21
+        WTI_OIL: 0.40
+        BRENT_OIL: 0.39
+        GASOLINE: 0.45
+
+  # === USDA soft-commodity bots (cotton / cocoa / coffee) — see docs/usda-softs-bots.md ===
+  # All three start enabled:false (dry-run only) and are NOT in daily_cycle.sh until
+  # validated live. Run `quantbots ingest` (fas_psd + nass) before running these.
+  # Mint dedicated accounts before go-live; for a dry-run, point account_env at an
+  # existing key (e.g. COMMODITY_SPOT_1_API_KEY).
+
+  # Cotton FAS bot (SINGLE SOURCE = USDA FAS PSD). Prices cotton futures threshold
+  # markets by drifting the live futures anchor toward the fundamental fair value
+  # (SIG_COTTON_FAS, computed in processing/signals.py). Refactor of the earlier
+  # blended cotton bot — NASS is now its own bot (nass_cotton_1). LIVE since 2026-06-01.
+  - name: cotton_fundamental_1
+    strategy: fas_fundamental
+    account_env: COTTON_FUNDAMENTAL_1_API_KEY   # own account: @Cottonfundamental1 (minted 2026-06-01, Ṁ100k)
+    enabled: true
+    limits:
+      max_order_size: 3000
+      liquidity_pct: 1.0
+      max_price_impact: 0.60
+      hold_band: 0.05
+      max_run_budget: 60000
+      per_group_pct: 1.0
+      min_ev: 0.05
+      min_resolvability: 0.04
+      max_total_exposure: 60000
+      max_group_exposure: 60000
+      dry_run_sample: 25
+      llm_comments: true         # local qwen3 writes the trade rationale (fallback: deterministic)
+    params:
+      reversion_rate: 0.5
+      drift_cap: 0.05            # the R^2~0.03 fit cannot justify more than a small tilt
+      max_horizon_years: 1.25
+      min_drift: 0.003           # meaningful-trade gate: abstain on negligible drift
+
+  # Cotton NASS bot (SINGLE SOURCE = USDA NASS crop condition). Needs NASS_API_KEY;
+  # abstains entirely without it. enabled:false until validated + account minted.
+  - name: nass_cotton_1
+    strategy: nass_crop
+    account_env: NASS_COTTON_1_API_KEY   # own account: @Nasscotton1 (minted 2026-06-01, Ṁ100k)
+    enabled: true    # LIVE 2026-06-01 (abstains until NASS_API_KEY is set)
+    limits:
+      max_order_size: 1000
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
+      hold_band: 0.05
+      min_ev: 0.05
+      min_resolvability: 0.04
+      max_total_exposure: 20000
+      max_group_exposure: 20000
+      dry_run_sample: 25
+      llm_comments: true
+    params:
+      cond_ref: 50.0
+      drift_cap: 0.05
+      max_horizon_years: 1.25
+
+  # CFTC positioning bot (SINGLE SOURCE = CFTC COT). Fades managed-money extremes on
+  # BOTH cotton and cocoa price markets (one source, multiple commodities is fine).
+  - name: cftc_softs_1
+    strategy: cftc_positioning
+    account_env: CFTC_SOFTS_1_API_KEY   # own account: @Cftcsofts1 (minted 2026-06-01, Ṁ100k)
+    enabled: true    # LIVE 2026-06-01
+    limits:
+      max_order_size: 1000
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
+      hold_band: 0.05
+      per_group_pct: 0.6
+      min_ev: 0.05
+      min_resolvability: 0.04
+      max_total_exposure: 20000
+      max_group_exposure: 12000
+      dry_run_sample: 25
+      llm_comments: true
+    params:
+      k: 0.04
+      min_z: 1.0
+      drift_cap: 0.08
+
+  # Weather bot (SINGLE SOURCE = open-meteo). Drifts cocoa price markets on Ivory
+  # Coast cocoa-belt drought anomalies.
+  - name: weather_cocoa_1
+    strategy: weather_anomaly
+    account_env: WEATHER_COCOA_1_API_KEY   # own account: @Weathercocoa1 (minted 2026-06-01, Ṁ100k)
+    enabled: true    # LIVE 2026-06-01
+    limits:
+      max_order_size: 1000
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
+      hold_band: 0.05
+      min_ev: 0.05
+      min_resolvability: 0.04
+      max_total_exposure: 15000
+      max_group_exposure: 15000
+      dry_run_sample: 25
+      llm_comments: true
+    params:
+      k: 0.03
+      min_abs: 1.0
+      drift_cap: 0.06
+      max_horizon_years: 1.5
+
+  # Cocoa: ICE cocoa (NY) futures price markets, vol-calibrated zero-drift lognormal.
+  # No USDA drift (cocoa absent from PSD); ICCO drift is future work.
+  - name: cocoa_fundamental_1
+    strategy: cocoa_fundamental
+    account_env: COCOA_FUNDAMENTAL_1_API_KEY   # own account: @CocoaBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.05
+      per_group_pct: 0.40
+      min_ev: 0.05
+      min_resolvability: 0.04    # ICE cocoa price markets clear this; ECOM volume markets don't
+      max_total_exposure: 6000
+      max_group_exposure: 6000
+      dry_run_sample: 25
+    params:
+      annual_vol: 0.40           # cocoa realized vol (full ~35%, recent 2y far higher)
+
+  # Coffee: "global coffee consumption growth rate exceed X%" markets, priced off
+  # USDA FAS world coffee consumption. NOTE: demand markets resolve ~0% on the clone,
+  # so min_resolvability is 0 to let it act, but exposure is kept small by design.
+  - name: coffee_consumption_1
+    strategy: coffee_consumption
+    account_env: COFFEE_CONSUMPTION_1_API_KEY   # own account: @CoffeeBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 20
+      liquidity_pct: 0.25
+      hold_band: 0.05
+      per_group_pct: 0.50
+      min_ev: 0.03
+      min_resolvability: 0.0     # demand markets score ~0.02; do not hard-gate (built per request)
+      max_total_exposure: 2000
+      max_group_exposure: 2000
+      dry_run_sample: 25
+    params:
+      mean_growth: 1.43          # FAS world coffee consumption YoY mean, 2010+
+      sigma_growth: 2.59         # and its std (the CDF band)

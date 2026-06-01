@@ -182,6 +182,24 @@ class ManifoldClient:
     def get_bets(self, **params: Any) -> list[dict]:
         return self._request("GET", "bets", params=params)
 
+    def get_open_limit_orders(
+        self, market_id: str | None = None, user_id: str | None = None
+    ) -> list[dict]:
+        """List the account's RESTING (unfilled, uncancelled) limit orders.
+
+        Authoritative live view of the maker's outstanding quotes. Each carries:
+        id, contractId, outcome, limitProb, orderAmount (total), amount
+        (filled-so-far), shares, isFilled, isCancelled, fills, expiresAt,
+        createdTime. Includes orders on closed/resolved markets. Defaults to the
+        current account when `user_id` is omitted.
+        """
+        if user_id is None:
+            user_id = self.get_me()["id"]
+        params: dict[str, Any] = {"userId": user_id, "kinds": "open-limit"}
+        if market_id is not None:
+            params["contractId"] = market_id
+        return self.get_bets(**params)
+
     # --- writes ----------------------------------------------------------
 
     def place_bet(
@@ -190,13 +208,26 @@ class ManifoldClient:
         outcome: str,
         amount: float,
         limit_prob: float | None = None,
+        expires_millis_after: int | None = None,
+        expires_at: int | None = None,
         dry_run: bool = False,
     ) -> dict:
         """Place a bet. `outcome` is "YES"/"NO", `amount` is integer mana.
         `limit_prob` (0.01–0.99) makes it a limit order. `dry_run=True` validates
         auth + payload without moving mana — the safest possible first write.
 
-        Response keys: betId, probBefore, probAfter, shares, amount.
+        `expires_millis_after` / `expires_at` are integer **milliseconds** and
+        only apply to limit orders (no effect without `limit_prob`). They give a
+        resting order a TTL: the server expires the unfilled remainder after the
+        deadline (precedence `expiresAt ?? now + expiresMillisAfter`; very large
+        values are rejected by the server's MAX_EXPIRES_AT ceiling). An expired
+        order reads back as `isCancelled=True` — there is no separate `isExpired`
+        flag; already-filled shares are kept as a position. This is the maker's
+        TTL re-quote primitive (post fresh quotes each cycle, let stale ones
+        self-expire).
+
+        Response keys: betId, probBefore, probAfter, shares, amount, orderAmount,
+        isFilled, fills.
         """
         data: dict[str, Any] = {
             "contractId": market_id,
@@ -204,14 +235,43 @@ class ManifoldClient:
             "amount": int(amount),
         }
         if limit_prob is not None:
-            data["limitProb"] = round(limit_prob, 2)  # 0.01–0.99
+            data["limitProb"] = round(limit_prob, 2)  # 0.01–0.99, whole-percent
+        if expires_millis_after is not None:
+            data["expiresMillisAfter"] = int(expires_millis_after)
+        if expires_at is not None:
+            data["expiresAt"] = int(expires_at)
         if dry_run:
             data["dryRun"] = True
         return self._request("POST", "bet", data=data)
 
+    def add_liquidity(self, market_id: str, amount: float, dry_run: bool = False) -> dict:
+        """Subsidize a market's CPMM pool with `amount` mana (integer), deepening
+        it so trades move price less per mana. Returns the LiquidityProvision.
+        The subsidy is returned to the provider at resolution (refunded on CANCEL).
+        """
+        data: dict[str, Any] = {"amount": int(amount)}
+        if dry_run:
+            data["dryRun"] = True
+        return self._request("POST", f"market/{market_id}/add-liquidity", data=data)
+
     def batch_bet(self, bets: list[dict]) -> Any:
-        """Up to 50 bets. Each: {contractId, outcome, amount, limitProb?}."""
+        """Up to 50 bets. Each: {contractId, outcome, amount,
+        limitProb?, expiresMillisAfter?, expiresAt?}. The maker posts both legs
+        of a quote in one call, e.g.
+        [{contractId, outcome:"YES", amount, limitProb:f-s, expiresMillisAfter:ttl},
+         {contractId, outcome:"NO",  amount, limitProb:f+s, expiresMillisAfter:ttl}].
+        """
         return self._request("POST", "batch-bet", data={"bets": bets})
+
+    def cancel_bet(self, bet_id: str) -> dict:
+        """Cancel the unfilled remainder of an open limit order by its BET id
+        (the id returned when the limit order was placed — NOT the contract id).
+        Already-filled shares are kept as a position. Returns the LimitBet.
+
+        The maker's anti-toxic-flow / re-quote control: pull a stale or
+        run-over quote instead of waiting for its TTL to expire.
+        """
+        return self._request("POST", f"bet/cancel/{bet_id}")
 
     def sell_shares(
         self,
