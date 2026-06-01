@@ -388,10 +388,12 @@ bots:
       hold_band: 0.05
       min_ev: 0.05
       min_resolvability: 0.04
+      max_run_budget: 20000
       max_total_exposure: 20000
       max_group_exposure: 20000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       cond_ref: 50.0
       drift_cap: 0.05
@@ -411,10 +413,12 @@ bots:
       per_group_pct: 0.6
       min_ev: 0.05
       min_resolvability: 0.04
+      max_run_budget: 20000
       max_total_exposure: 20000
       max_group_exposure: 12000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       k: 0.04
       min_z: 1.0
@@ -434,10 +438,12 @@ bots:
       hold_band: 0.05
       min_ev: 0.05
       min_resolvability: 0.04
+      max_run_budget: 15000
       max_total_exposure: 15000
       max_group_exposure: 15000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       k: 0.03
       min_abs: 1.0
@@ -458,10 +464,12 @@ bots:
       per_group_pct: 1.0
       min_ev: 0.05
       min_resolvability: 0.04    # ICE cocoa price markets clear this; ECOM volume markets don't
+      max_run_budget: 40000
       max_total_exposure: 40000
       max_group_exposure: 40000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       annual_vol: 0.40           # cocoa realized vol (full ~35%, recent 2y far higher)
       max_horizon_years: 4.0     # cover far-dated cocoa price markets
@@ -479,13 +487,15 @@ bots:
       max_price_impact: 0.30
       hold_band: 0.05
       per_group_pct: 1.0
-      min_ev: 0.005              # demand markets have low realized EV (resolvability ~0.04);
-                                 # floor lowered so coffee actually trades its coverage (per request)
+      min_ev: 0.001              # demand markets have low realized EV (resolvability ~0.04) AND
+                                 # modest edge; floor lowered so coffee trades its coverage (per request)
       min_resolvability: 0.0     # demand markets score ~0.02; do not hard-gate (built per request)
+      max_run_budget: 8000
       max_total_exposure: 8000
       max_group_exposure: 8000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       mean_growth: 1.43          # FAS world coffee consumption YoY mean, 2010+
       sigma_growth: 2.59         # and its std (the CDF band)
@@ -505,9 +515,11 @@ bots:
       min_ev: 0.01               # quantity markets resolve rarely (low realized EV); lowered
                                  # so the balance bot trades its coverage (per request)
       min_resolvability: 0.0     # quantity markets resolve rarely; allocator sizes them down
+      max_run_budget: 8000
       max_total_exposure: 8000
       max_group_exposure: 4000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       rel_std: 0.04              # FAS forecast revision uncertainty band
