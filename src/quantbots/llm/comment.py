@@ -28,13 +28,36 @@ _SYSTEM = (
 )
 
 
+# Hosted comment backends (COMMENTS ONLY — alpha/data-processing stays local per
+# CLAUDE.md). Maps a model name -> (base_url, env var holding the API key).
+_HOSTED = {
+    "mercury-2": ("https://api.inceptionlabs.ai/v1", "INCEPTION_API_KEY"),
+}
+
+
+def _complete(model: str, system: str, user: str) -> str:
+    """One chat completion. Routes hosted models (e.g. mercury-2) to their cloud
+    endpoint; everything else goes to the LOCAL Ollama client."""
+    if model in _HOSTED:
+        import os
+        from openai import OpenAI
+        base_url, key_env = _HOSTED[model]
+        key = os.environ.get(key_env)
+        if not key:
+            raise RuntimeError(f"{key_env} not set")
+        client = OpenAI(base_url=base_url, api_key=key)
+        resp = client.chat.completions.create(
+            model=model, temperature=0.2,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        )
+        return resp.choices[0].message.content or ""
+    from .client import LocalLLM  # local Ollama (default)
+    return LocalLLM(model=model).text_completion(user, temperature=0.2, system=system)
+
+
 def generate_comment(*, bot: str, question: str, direction: str, amount: float,
                      detail: dict, model: str = "qwen3:8b") -> str | None:
     """Return an LLM-written rationale, or None to fall back to deterministic text."""
-    try:
-        from .client import LocalLLM
-    except Exception:
-        return None
     facts = "; ".join(f"{k}={v}" for k, v in detail.items() if k != "reason" and v is not None)
     reason = detail.get("reason", "")
     user = (
@@ -43,8 +66,7 @@ def generate_comment(*, bot: str, question: str, direction: str, amount: float,
         "Write the rationale paragraph."
     )
     try:
-        llm = LocalLLM(model=model)
-        out = llm.text_completion(user, temperature=0.2, system=_SYSTEM)
+        out = _complete(model, _SYSTEM, user)
     except Exception as e:  # LLM unavailable / timeout -> deterministic fallback
         logger.info("llm comment unavailable (%s); using deterministic explain", e)
         return None

@@ -393,6 +393,7 @@ bots:
       max_group_exposure: 20000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       cond_ref: 50.0
       drift_cap: 0.05
@@ -417,6 +418,7 @@ bots:
       max_group_exposure: 12000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       k: 0.04
       min_z: 1.0
@@ -441,6 +443,7 @@ bots:
       max_group_exposure: 15000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       k: 0.03
       min_abs: 1.0
@@ -466,6 +469,7 @@ bots:
       max_group_exposure: 40000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       annual_vol: 0.40           # cocoa realized vol (full ~35%, recent 2y far higher)
       max_horizon_years: 4.0     # cover far-dated cocoa price markets
@@ -491,6 +495,7 @@ bots:
       max_group_exposure: 8000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       mean_growth: 1.43          # FAS world coffee consumption YoY mean, 2010+
       sigma_growth: 2.59         # and its std (the CDF band)
@@ -515,5 +520,6 @@ bots:
       max_group_exposure: 4000
       dry_run_sample: 25
       llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       rel_std: 0.04              # FAS forecast revision uncertainty band
