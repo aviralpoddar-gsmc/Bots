@@ -479,8 +479,8 @@ bots:
       max_price_impact: 0.30
       hold_band: 0.05
       per_group_pct: 1.0
-      min_ev: 0.005              # demand markets have low realized EV (resolvability ~0.04);
-                                 # floor lowered so coffee actually trades its coverage (per request)
+      min_ev: 0.001              # demand markets have low realized EV (resolvability ~0.04) AND
+                                 # modest edge; floor lowered so coffee trades its coverage (per request)
       min_resolvability: 0.0     # demand markets score ~0.02; do not hard-gate (built per request)
       max_total_exposure: 8000
       max_group_exposure: 8000
