@@ -29,6 +29,13 @@ class BotConfig:
     strategy: str
     account_env: str = "MANIFOLD_CLONE_API_KEY"
     enabled: bool = True
+    #: Execution mode. When True the runner executes this bot as a MAKER (two-sided
+    #: limit-capped resting quotes around `strategy`'s fair value + fill
+    #: reconciliation) instead of a taker (immediate market orders). The maker's
+    #: execution knobs (half_spread, inventory_cap, quote_ttl_hours, max_markets,
+    #: ...) are read from `limits`. Any calibrated anchor becomes a liquidity
+    #: provider on its own account by adding `maker: true` — no separate bot.
+    maker: bool = False
     limits: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_LIMITS))
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -54,6 +61,7 @@ def load_bots(path: Path | str = DEFAULT_CONFIG) -> list[BotConfig]:
                 strategy=entry["strategy"],
                 account_env=entry.get("account_env", "MANIFOLD_CLONE_API_KEY"),
                 enabled=entry.get("enabled", True),
+                maker=entry.get("maker", False),
                 limits=_merge_limits(entry.get("limits")),
                 params=entry.get("params", {}),
             )

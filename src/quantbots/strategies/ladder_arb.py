@@ -110,6 +110,14 @@ def isotonic_decreasing(values: list[float], weights: list[float]) -> list[float
 
 class LadderArbStrategy(Strategy):
     name = "ladder_arb"
+    description = (
+        "Model-free structural arbitrage on numeric threshold ladders. For any "
+        "ladder of '>k' markets (production, demand, price, spread, ...), the "
+        "survival probabilities must be non-increasing in k. Fits the closest "
+        "non-increasing curve via weighted isotonic regression (PAVA) — strikes "
+        "off-curve are provably mispriced relative to the others, so we trade "
+        "them toward the fit. Domain-agnostic; needs no external data feed."
+    )
 
     def __init__(self, dev_band: float = 0.03, informative_weight: float = 5.0,
                  min_strikes: int = 3, skip_extreme: float = 0.02, **params: Any):

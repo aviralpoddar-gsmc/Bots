@@ -17,6 +17,10 @@ _REGISTRY: dict[str, str] = {
     "fred": "quantbots.sources.fred:FredSource",           # US macro series (keyless CSV)
     "noaa": "quantbots.sources.noaa:NoaaSource",           # climate indices (ENSO/ONI)
     "rss": "quantbots.sources.rss:RSSSource",              # news / text
+    "fas_psd": "quantbots.sources.fas_psd:FasPsdSource",   # USDA FAS PSD world S&D (keyless bulk CSV)
+    "nass": "quantbots.sources.nass:NassSource",           # USDA NASS QuickStats (keyed; optional)
+    "cftc": "quantbots.sources.cftc:CftcSource",           # CFTC Commitments of Traders (keyless Socrata)
+    "weather": "quantbots.sources.weather:WeatherSource",  # open-meteo growing-region weather (keyless)
 }
 
 

@@ -55,3 +55,18 @@ class LocalLLM:
             extra_body={"options": {"num_ctx": self.num_ctx}},  # critical for Ollama
         )
         return resp.choices[0].message.content or ""
+
+    def text_completion(self, user: str, temperature: float = 0.0, system: str | None = None) -> str:
+        """One free-form chat completion (no JSON mode). For prompts whose output
+        format is plain text — e.g. ForecastBench's `*0.42*` answer convention."""
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user})
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            extra_body={"options": {"num_ctx": self.num_ctx}},
+        )
+        return resp.choices[0].message.content or ""

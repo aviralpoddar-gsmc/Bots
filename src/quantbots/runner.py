@@ -122,7 +122,9 @@ def sync_resolutions(client: ManifoldClient, store: Store, bot_id: int) -> int:
     closed = 0
     skipped = 0
     fallback_fetches = 0
-    for market_id, pos in store.open_positions(bot_id).items():
+    # Iterate per LEG, not per market: a two-sided (maker) position holds both a
+    # YES and a NO leg on one market, and each must get its own RESOLUTION_CLOSE.
+    for (market_id, _direction), pos in store.open_position_legs(bot_id).items():
         market = store.get_cached_market(market_id)
         if market is None:
             # Cache miss — rare after a refresh. Fall back to the API; on failure
@@ -292,6 +294,7 @@ def run_bot(
     # bets were NOT placed, so we collect and retry them with backoff (safe, no
     # double-bet). Hard errors (bad payload, insufficient balance) are not retried.
     by_id = {s["market_id"]: s for s in signals}
+    questions = {m["id"]: m.get("question", "") for m in markets}
     # Commenting is part of the pipeline contract — every successful bet posts
     # a justification comment. Disabling is opt-in for testing only; log so it
     # never happens by accident in production.
@@ -312,10 +315,24 @@ def run_bot(
         )
         result.orders_placed += 1
         if post_comments:
+            explanation = strategy.explain(s["market_id"])
+            # Optional: have a LOCAL LLM rephrase the bot's own numbers into a
+            # clearer rationale (decision stays deterministic; LLM only writes prose).
+            if bot.limits.get("llm_comments"):
+                try:
+                    from .llm.comment import generate_comment
+                    detail = getattr(strategy, "_explanations", {}).get(s["market_id"], {})
+                    llm_txt = generate_comment(
+                        bot=bot.name, question=questions.get(s["market_id"], ""),
+                        direction=s["direction"], amount=resp.get("amount", s["amount"]),
+                        detail=detail, model=bot.limits.get("llm_model", "qwen3:8b"),
+                    )
+                    if llm_txt:
+                        explanation = llm_txt + (f"\n\n{explanation}" if explanation else "")
+                except Exception as e:  # noqa: BLE001 - never block the bet on comment gen
+                    logger.warning("llm comment failed for %s: %s", s["market_id"], e)
             try:
-                markdown = format_trade_comment(
-                    bot.name, s, resp, strategy.explain(s["market_id"]),
-                )
+                markdown = format_trade_comment(bot.name, s, resp, explanation)
                 client.post_comment(s["market_id"], markdown)
             except Exception as e:  # noqa: BLE001 - comment failure must NOT unwind the bet
                 logger.warning("comment-post failed for %s: %s", s["market_id"], e)

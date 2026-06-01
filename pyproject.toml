@@ -20,6 +20,8 @@ llm = ["openai>=1.30"]
 realtime = ["websockets>=12.0"]
 # Local web dashboard (`quantbots dashboard`).
 dashboard = ["flask>=3.0"]
+# Pairs research / correlation analysis (`scripts/research_pairs.py`).
+research = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.2", "matplotlib>=3.9", "yfinance>=0.2"]
 
 [project.scripts]
 quantbots = "quantbots.cli:app"

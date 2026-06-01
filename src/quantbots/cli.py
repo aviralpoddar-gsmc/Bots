@@ -3,7 +3,8 @@
     quantbots health                 # prove API key + Cloudflare Access work
     quantbots refresh                # pull markets into the local cache
     quantbots ingest                 # fetch external data sources into the cache
-    quantbots run --bot NAME         # dry-run a bot (default); add --live to trade
+    quantbots run --bot NAME         # dry-run a taker bot (default); --live to trade
+    quantbots make --bot NAME        # dry-run a market-maker bot (default); --live to quote
     quantbots status                 # dashboard: balance, per-bot PnL, exposure
     quantbots resolve --bot NAME     # close out resolved positions
     quantbots snapshot               # roll up PnL + print leaderboard
@@ -140,6 +141,23 @@ def ingest(
 
 
 @app.command()
+def process() -> None:
+    """Compute normalized SIG_* signals from ingested data (run after `ingest`)."""
+    from .processing import run_all
+
+    with Store() as store:
+        n = run_all(store)
+        sigs = [e for e in store.known_entities() if e.startswith("SIG_")]
+    console.print(f"[green]processed[/]: wrote {n} signals; {len(sigs)} SIG_* entities present")
+    for e in sorted(sigs):
+        o = None
+        with Store() as store:
+            o = store.latest_observation(e)
+        val = o.get("value") if o else None
+        console.print(f"  • {e} = {val:.3f}" if isinstance(val, (int, float)) else f"  • {e}")
+
+
+@app.command()
 def refresh(
     limit: int = typer.Option(1000, help="Max markets to pull"),
     search: str = typer.Option("", help="Optional search term to scope the universe"),
@@ -170,12 +188,19 @@ def run(
     live: bool = typer.Option(False, "--live", help="Actually place bets (default: dry-run)"),
     budget: float = typer.Option(0, "--budget", help="Override max mana this run may spend"),
 ) -> None:
-    """Run one bot. Dry-run by default — validates orders without moving mana."""
+    """Run one bot. Dry-run by default — validates orders without moving mana.
+
+    Routes to the MAKER execution path automatically when the bot has `maker: true`
+    in config (so the daily cycle picks up maker-mode bots without a separate
+    command)."""
     cfg = load_bot(bot)
     if budget > 0:
         cfg.limits["max_run_budget"] = budget
     if not cfg.api_key:
         raise typer.BadParameter(f"No key in env var {cfg.account_env!r}")
+    if cfg.maker:
+        _run_maker_cli(cfg, live=live)
+        return
     strat = get_strategy(cfg.strategy, **cfg.params)
     with Store() as store:
         result = run_bot(
@@ -199,6 +224,56 @@ def run(
         console.print(f"validated a sample, {len(result.errors)} errors")
     else:
         console.print(f"[green]placed[/] {result.orders_placed} orders, {len(result.errors)} errors")
+    for e in result.errors[:10]:
+        console.print(f"  [red]err[/] {e}")
+
+
+@app.command()
+def make(
+    bot: str = typer.Option(..., "--bot", help="Bot name from config/bots.yaml"),
+    live: bool = typer.Option(False, "--live", help="Actually post quotes (default: dry-run)"),
+    budget: float = typer.Option(0, "--budget", help="Override max mana this cycle may reserve"),
+) -> None:
+    """Force MAKER execution for one bot: post two-sided resting limit quotes
+    around its fair value. Works for any bot (the `market_maker` wrapper strategy
+    OR any calibrated source via maker-mode). Dry-run by default. `quantbots run`
+    already auto-routes bots with `maker: true`; use `make` to maker-run on demand."""
+    cfg = load_bot(bot)
+    if budget > 0:
+        cfg.limits["max_run_budget"] = budget
+    if not cfg.api_key:
+        raise typer.BadParameter(f"No key in env var {cfg.account_env!r}")
+    _run_maker_cli(cfg, live=live)
+
+
+def _run_maker_cli(cfg, *, live: bool) -> None:
+    """Shared maker execution + reporting for `make` and maker-routed `run`."""
+    from .maker import build_maker_strategy, run_maker
+
+    strat = build_maker_strategy(cfg)
+    with Store() as store:
+        result = run_maker(
+            bot=cfg, client=_client(cfg.api_key), store=store, strategy=strat, dry_run=not live
+        )
+    mode = "[red]LIVE[/]" if live else "[yellow]dry-run[/]"
+    legs = sum(len(q.sides) for q in result.quotes)
+    console.print(
+        f"{mode} {result.bot} [maker]: {len(result.quotes)} two-sided quotes ({legs} legs) "
+        f"on {result.n_markets} priced markets, reserving [cyan]Ṁ{result.reserved_mana:,.0f}[/]"
+    )
+    for q in result.quotes[:25]:
+        sides = "+".join(q.sides)
+        console.print(
+            f"  {q.bid:.2f} / [cyan]{q.fair:.2f}[/] / {q.ask:.2f}  ×Ṁ{q.size} [{sides}]  "
+            f"{(q.question or q.market_id)[:54]}"
+        )
+    if live:
+        console.print(
+            f"[green]posted[/] {result.legs_posted} legs, cancelled {result.cancelled} stale, "
+            f"recorded {result.fills_recorded} fills, {len(result.errors)} errors"
+        )
+    else:
+        console.print(f"validated a sample, {len(result.errors)} errors")
     for e in result.errors[:10]:
         console.print(f"  [red]err[/] {e}")
 

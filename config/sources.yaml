@@ -59,3 +59,38 @@ sources:
       max_items: 30
       feeds:
         - { entity: EIA_TODAY_IN_ENERGY, url: "https://www.eia.gov/rss/todayinenergy.xml" }
+
+  # USDA FAS PSD world supply/demand (keyless bulk CSV). Emits
+  # PSD_COTTON_FREE_SUR (ex-China stocks-to-use), PSD_COTTON_SUR,
+  # PSD_COFFEE_CONS, PSD_COFFEE_CONS_GROWTH. Drives the cotton + coffee bots.
+  - name: fas_psd
+    enabled: true
+    params:
+      max_age_hours: 24
+      commodities: [cotton, coffee]
+
+  # USDA NASS QuickStats (keyed — set NASS_API_KEY; skipped gracefully if absent).
+  # Single signal source for the nass_crop bot (US cotton crop condition).
+  - name: nass
+    enabled: true
+    params:
+      series:
+        - entity: NASS_COTTON_COND_GE
+          agg_level_desc: NATIONAL
+          sum_short_desc:
+            - "COTTON, UPLAND - CONDITION, MEASURED IN PCT GOOD"
+            - "COTTON, UPLAND - CONDITION, MEASURED IN PCT EXCELLENT"
+
+  # CFTC Commitments of Traders (keyless). Single signal source for cftc_positioning.
+  - name: cftc
+    enabled: true
+    params:
+      commodities: [cotton, cocoa, coffee]
+
+  # Growing-region weather (keyless open-meteo). Single signal source for weather_anomaly.
+  - name: weather
+    enabled: true
+    params:
+      regions:
+        - { key: COCOA_CI, lat: 6.8, lon: -5.3 }
+        - { key: COFFEE_BR, lat: -21.0, lon: -45.0 }

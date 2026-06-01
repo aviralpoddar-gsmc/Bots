@@ -45,6 +45,13 @@ def _fit_normal_to_survival(strikes: np.ndarray, probs: np.ndarray) -> tuple[flo
 
 class SurfaceArbStrategy(Strategy):
     name = "surface_arb"
+    description = (
+        "Parametric volatility-surface fit. For each threshold ladder, finds the "
+        "normal CDF whose survival best matches the quoted prices (scipy lsq); "
+        "strikes off-curve are traded toward the fitted surface. Heavier-weight, "
+        "scipy-based counterpart to ladder_arb, useful when the ladder is dense "
+        "enough that a smooth parametric fit beats a step-isotonic one."
+    )
 
     def prefilter(self, markets: list[Market]) -> list[Market]:
         markets = super().prefilter(markets)

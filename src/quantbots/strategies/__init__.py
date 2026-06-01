@@ -20,8 +20,22 @@ _REGISTRY: dict[str, str] = {
     "enso": "quantbots.strategies.enso:EnsoStrategy",
     "commodity_futures": "quantbots.strategies.commodity_futures:CommodityFuturesStrategy",
     "commodity_spot": "quantbots.strategies.commodity_spot:CommoditySpotStrategy",
+    "cotton_fundamental": "quantbots.strategies.cotton_fundamental:CottonFundamentalStrategy",
+    "cocoa_fundamental": "quantbots.strategies.cocoa_fundamental:CocoaFundamentalStrategy",
+    "coffee_consumption": "quantbots.strategies.coffee_consumption:CoffeeConsumptionStrategy",
+    # Single-source, price-anchored bots (one data source each) on the shared base.
+    "fas_fundamental": "quantbots.strategies.fas_fundamental:FasFundamentalStrategy",
+    "fas_balance": "quantbots.strategies.fas_balance:FasBalanceStrategy",
+    "cftc_positioning": "quantbots.strategies.cftc_positioning:CftcPositioningStrategy",
+    "weather_anomaly": "quantbots.strategies.weather_anomaly:WeatherAnomalyStrategy",
+    "nass_crop": "quantbots.strategies.nass_crop:NassCropStrategy",
+    "pair_trading": "quantbots.strategies.pair_trading:PairTradingStrategy",
     "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
     "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",
+    "stockpile_facts": "quantbots.strategies.stockpile_facts:StockpileFactsStrategy",
+    "stockpile_grid_arb": "quantbots.strategies.stockpile_grid_arb:StockpileGridArbStrategy",
+    "stockpile_coherence": "quantbots.strategies.stockpile_coherence:StockpileCoherenceStrategy",
+    "market_maker": "quantbots.strategies.market_maker:MarketMakerStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

@@ -81,6 +81,11 @@ class Store:
         """{market_id: position-summary} for OPEN positions, derived from the ledger."""
         return trades_mod.open_positions(self.conn, bot_id)
 
+    def open_position_legs(self, bot_id: int) -> dict[tuple[str, str], dict]:
+        """{(market_id, direction): summary} — every OPEN leg distinctly (the maker
+        holds two-sided positions that open_positions would collapse)."""
+        return trades_mod.open_position_legs(self.conn, bot_id)
+
     # --- market cache ----------------------------------------------------
 
     def upsert_markets(self, markets: list[dict]) -> int:

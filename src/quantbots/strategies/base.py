@@ -33,6 +33,13 @@ class Strategy(ABC):
     #: Stable identifier, also used as the key in the strategy REGISTRY.
     name: str = "base"
 
+    #: Long-form description shown on the dashboard's bot card. Should explain
+    #: *what inefficiency the strategy exploits*, *which market universe it
+    #: targets*, and *the edge logic in one or two sentences*. Authored on the
+    #: class so the description lives with the code and new bots can't ship
+    #: without one. 2-4 sentences is the sweet spot.
+    description: str = ""
+
     def __init__(self, **params: Any):
         #: Free-form strategy parameters from config/bots.yaml `params:`.
         self.params = params

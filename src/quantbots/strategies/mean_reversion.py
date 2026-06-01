@@ -14,6 +14,12 @@ from .base import Market, Strategy
 
 class MeanReversionStrategy(Strategy):
     name = "mean_reversion"
+    description = (
+        "Baseline EMA mean-reversion. Each market's probability is tracked with "
+        "an exponential moving average; bets long when current is far below the "
+        "EMA, short when far above. No domain assumption — runs as a sanity-floor "
+        "benchmark against the smarter strategies."
+    )
 
     def __init__(self, alpha: float = 0.2, **params: object):
         super().__init__(alpha=alpha, **params)

@@ -35,6 +35,13 @@ def _norm_cdf(x: float) -> float:
 
 class EnsembleStrategy(Strategy):
     name = "ensemble"
+    description = (
+        "Multi-source fair-value fusion. Combines observations from Stooq "
+        "(prices/equities/softs), FRED (US macro), World Bank (global macro), "
+        "NOAA (climate), and RSS (news headlines) into one calibrated probability "
+        "per market. Per-entity vol overrides come from FRED-history backtests "
+        "(e.g. mortgage30 vol = 0.15 with Brier skill +41%)."
+    )
 
     def __init__(
         self,
