@@ -78,8 +78,8 @@ sources:
         - entity: NASS_COTTON_COND_GE
           agg_level_desc: NATIONAL
           sum_short_desc:
-            - "COTTON - CONDITION, MEASURED IN PCT GOOD"
-            - "COTTON - CONDITION, MEASURED IN PCT EXCELLENT"
+            - "COTTON, UPLAND - CONDITION, MEASURED IN PCT GOOD"
+            - "COTTON, UPLAND - CONDITION, MEASURED IN PCT EXCELLENT"
 
   # CFTC Commitments of Traders (keyless). Single signal source for cftc_positioning.
   - name: cftc
