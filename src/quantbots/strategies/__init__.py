@@ -25,6 +25,7 @@ _REGISTRY: dict[str, str] = {
     "coffee_consumption": "quantbots.strategies.coffee_consumption:CoffeeConsumptionStrategy",
     # Single-source, price-anchored bots (one data source each) on the shared base.
     "fas_fundamental": "quantbots.strategies.fas_fundamental:FasFundamentalStrategy",
+    "fas_balance": "quantbots.strategies.fas_balance:FasBalanceStrategy",
     "cftc_positioning": "quantbots.strategies.cftc_positioning:CftcPositioningStrategy",
     "weather_anomaly": "quantbots.strategies.weather_anomaly:WeatherAnomalyStrategy",
     "nass_crop": "quantbots.strategies.nass_crop:NassCropStrategy",

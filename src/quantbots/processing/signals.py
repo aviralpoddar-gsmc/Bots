@@ -62,6 +62,52 @@ def compute_fas_cotton(max_age_hours: float = 24) -> list[Observation]:
     )]
 
 
+def _country_by_year(text: str, attribute: str, country: str) -> dict[int, float]:
+    """One country's attribute per marketing year (1000-bale units for cotton)."""
+    import csv as _csv
+    import io as _io
+    out: dict[int, float] = {}
+    for row in _csv.DictReader(_io.StringIO(text)):
+        if row["Attribute_Description"] != attribute or row["Country_Name"] != country:
+            continue
+        try:
+            out[int(row["Market_Year"])] = float(row["Value"])
+        except (ValueError, KeyError):
+            continue
+    return out
+
+
+def compute_fas_balance(max_age_hours: float = 24, recent: int = 4) -> list[Observation]:
+    """Cotton balance-sheet quantities (MILLION 480-lb bales) per marketing year,
+    for the fas_balance bot. World production / mill use (domestic use) / ending
+    stocks, plus China imports & Brazil exports. value=latest MY; payload.by_my
+    maps marketing_year -> value so the strategy can pick the market's year."""
+    try:
+        text = _download_csv("cotton", max_age_hours)
+    except Exception as exc:
+        logger.warning("signals fas_balance: %s", exc)
+        return []
+    specs = [
+        ("SIG_COTTON_WORLD_PRODUCTION", lambda: _world_by_year(text, "Production", set())),
+        ("SIG_COTTON_WORLD_MILLUSE", lambda: _world_by_year(text, "Domestic Use", set())),
+        ("SIG_COTTON_WORLD_ENDSTOCKS", lambda: _world_by_year(text, "Ending Stocks", set())),
+        ("SIG_COTTON_CHINA_IMPORTS", lambda: _country_by_year(text, "Imports", "China")),
+        ("SIG_COTTON_BRAZIL_EXPORTS", lambda: _country_by_year(text, "Exports", "Brazil")),
+    ]
+    out: list[Observation] = []
+    for entity, fn in specs:
+        series = {y: v / 1000.0 for y, v in fn().items()}  # 1000-bale -> million bales
+        if not series:
+            continue
+        yr = max(series)
+        by_my = {str(y): series[y] for y in sorted(series)[-recent:]}
+        out.append(Observation(
+            source="signal", entity=entity, ts=f"{yr}-08-01T00:00:00", value=series[yr],
+            payload={"by_my": by_my, "unit": "million_bales", "marketing_year": yr},
+        ))
+    return out
+
+
 def compute_cftc(commodities: list[str], window: int = 156) -> list[Observation]:
     """Managed-money net-% z-score over a trailing window (default ~3y of weeks)."""
     out: list[Observation] = []
@@ -116,6 +162,7 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     commodities = commodities or ["cotton", "cocoa", "coffee"]
     obs: list[Observation] = []
     obs += compute_fas_cotton()
+    obs += compute_fas_balance()
     obs += compute_cftc(commodities)
     obs += compute_weather_cocoa()
     n = store.upsert_observations(obs) if obs else 0

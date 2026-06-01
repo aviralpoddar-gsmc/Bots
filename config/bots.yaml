@@ -372,7 +372,7 @@ bots:
     params:
       reversion_rate: 0.5
       drift_cap: 0.05            # the R^2~0.03 fit cannot justify more than a small tilt
-      max_horizon_years: 1.25
+      max_horizon_years: 4.0     # cover far-dated cotton price markets (2029/2030)
       min_drift: 0.003           # meaningful-trade gate: abstain on negligible drift
 
   # Cotton NASS bot (SINGLE SOURCE = USDA NASS crop condition). Needs NASS_API_KEY;
@@ -395,7 +395,7 @@ bots:
     params:
       cond_ref: 50.0
       drift_cap: 0.05
-      max_horizon_years: 1.25
+      max_horizon_years: 4.0
 
   # CFTC positioning bot (SINGLE SOURCE = CFTC COT). Fades managed-money extremes on
   # BOTH cotton and cocoa price markets (one source, multiple commodities is fine).
@@ -419,6 +419,7 @@ bots:
       k: 0.04
       min_z: 1.0
       drift_cap: 0.08
+      max_horizon_years: 4.0     # cover far-dated cotton+cocoa price markets
 
   # Weather bot (SINGLE SOURCE = open-meteo). Drifts cocoa price markets on Ivory
   # Coast cocoa-belt drought anomalies.
@@ -441,45 +442,72 @@ bots:
       k: 0.03
       min_abs: 1.0
       drift_cap: 0.06
-      max_horizon_years: 1.5
+      max_horizon_years: 4.0     # cover far-dated cocoa price markets
 
   # Cocoa: ICE cocoa (NY) futures price markets, vol-calibrated zero-drift lognormal.
   # No USDA drift (cocoa absent from PSD); ICCO drift is future work.
   - name: cocoa_fundamental_1
     strategy: cocoa_fundamental
-    account_env: COCOA_FUNDAMENTAL_1_API_KEY   # own account: @CocoaBot (mint at go-live)
-    enabled: false
+    account_env: COCOA_FUNDAMENTAL_1_API_KEY   # own account: @CocoaFundamentalBot (minted 2026-06-01)
+    enabled: true    # LIVE 2026-06-01 — broad cocoa PRICE coverage (vol-anchored)
     limits:
-      max_order_size: 50
-      liquidity_pct: 0.25
-      max_price_impact: 0.05
+      max_order_size: 1500
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
       hold_band: 0.05
-      per_group_pct: 0.40
+      per_group_pct: 1.0
       min_ev: 0.05
       min_resolvability: 0.04    # ICE cocoa price markets clear this; ECOM volume markets don't
-      max_total_exposure: 6000
-      max_group_exposure: 6000
+      max_total_exposure: 40000
+      max_group_exposure: 40000
       dry_run_sample: 25
+      llm_comments: true
     params:
       annual_vol: 0.40           # cocoa realized vol (full ~35%, recent 2y far higher)
+      max_horizon_years: 4.0     # cover far-dated cocoa price markets
 
   # Coffee: "global coffee consumption growth rate exceed X%" markets, priced off
   # USDA FAS world coffee consumption. NOTE: demand markets resolve ~0% on the clone,
   # so min_resolvability is 0 to let it act, but exposure is kept small by design.
   - name: coffee_consumption_1
     strategy: coffee_consumption
-    account_env: COFFEE_CONSUMPTION_1_API_KEY   # own account: @CoffeeBot (mint at go-live)
-    enabled: false
+    account_env: COFFEE_CONSUMPTION_1_API_KEY   # own account: @CoffeeConsumptionBot (minted 2026-06-01)
+    enabled: true    # LIVE 2026-06-01 — coffee consumption-growth markets
     limits:
-      max_order_size: 20
-      liquidity_pct: 0.25
+      max_order_size: 300
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
       hold_band: 0.05
-      per_group_pct: 0.50
-      min_ev: 0.03
+      per_group_pct: 1.0
+      min_ev: 0.005              # demand markets have low realized EV (resolvability ~0.04);
+                                 # floor lowered so coffee actually trades its coverage (per request)
       min_resolvability: 0.0     # demand markets score ~0.02; do not hard-gate (built per request)
-      max_total_exposure: 2000
-      max_group_exposure: 2000
+      max_total_exposure: 8000
+      max_group_exposure: 8000
       dry_run_sample: 25
+      llm_comments: true
     params:
       mean_growth: 1.43          # FAS world coffee consumption YoY mean, 2010+
       sigma_growth: 2.59         # and its std (the CDF band)
+
+  # FAS balance-sheet bot (SINGLE SOURCE = USDA FAS PSD): cotton quantity markets
+  # (global production / mill use / ending stocks, China imports, Brazil exports).
+  - name: fas_balance_1
+    strategy: fas_balance
+    account_env: FAS_BALANCE_1_API_KEY
+    enabled: true    # LIVE 2026-06-01
+    limits:
+      max_order_size: 500
+      liquidity_pct: 0.5
+      max_price_impact: 0.30
+      hold_band: 0.05
+      per_group_pct: 0.5
+      min_ev: 0.01               # quantity markets resolve rarely (low realized EV); lowered
+                                 # so the balance bot trades its coverage (per request)
+      min_resolvability: 0.0     # quantity markets resolve rarely; allocator sizes them down
+      max_total_exposure: 8000
+      max_group_exposure: 4000
+      dry_run_sample: 25
+      llm_comments: true
+    params:
+      rel_std: 0.04              # FAS forecast revision uncertainty band
