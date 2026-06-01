@@ -523,3 +523,29 @@ bots:
       llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
     params:
       rel_std: 0.04              # FAS forecast revision uncertainty band
+
+  # WASDE event overlay (SINGLE SOURCE = USDA WASDE): cotton ending-stocks revision
+  # surprise. Abstains until a new WASDE prints a surprise vs the prior report
+  # (captured baseline = May 2026; first surprise on the ~June 11 WASDE).
+  - name: wasde_cotton_1
+    strategy: wasde_event
+    account_env: WASDE_COTTON_1_API_KEY
+    enabled: true    # LIVE 2026-06-01 (abstains until next WASDE print)
+    limits:
+      max_order_size: 2000
+      liquidity_pct: 0.5
+      max_price_impact: 0.40
+      hold_band: 0.05
+      max_run_budget: 30000
+      per_group_pct: 1.0
+      min_ev: 0.05
+      min_resolvability: 0.04
+      max_total_exposure: 30000
+      max_group_exposure: 30000
+      dry_run_sample: 25
+      llm_comments: true
+      llm_model: mercury-2     # hosted (Inception) — COMMENTS ONLY; alpha stays local
+    params:
+      k: 1.0                     # drift per 1.0 (100%) ending-stocks surprise
+      min_surprise: 0.01         # ignore revisions smaller than 1%
+      drift_cap: 0.10            # WASDE moves can be large -> wider cap than the level bot

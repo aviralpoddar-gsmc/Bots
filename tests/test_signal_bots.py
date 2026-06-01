@@ -105,6 +105,42 @@ def test_signal_drift_handles_string_payload():
     assert s.estimate([mkt(COTTON, mid="x")])  # must not raise
 
 
+class ObsSeries(Obs):
+    """Fake obs handle with load_observations for the WASDE overlay (newest first)."""
+    def __init__(self, v, series=None):
+        super().__init__(v)
+        self.series = series or {}
+
+    def load_observations(self, entity, limit=1000, **kw):
+        return self.series.get(entity, [])[:limit]
+
+
+def test_wasde_abstains_without_prior():
+    s = get_strategy("wasde_event")
+    s.bind(ObsSeries({"CME_COTTON": {"value": 76.7}},
+                     {"SIG_COTTON_WASDE": [{"value": 71.0}]}))  # only one report
+    assert s.estimate([mkt(COTTON, mid="x")]) == {}
+
+
+def test_wasde_stocks_down_is_bullish():
+    s = get_strategy("wasde_event", k=1.0)
+    base = {"CME_COTTON": {"value": 76.7}}
+    # stocks revised DOWN 71->66 (tighter) -> bullish -> higher P(exceed)
+    s.bind(ObsSeries(base, {"SIG_COTTON_WASDE": [{"value": 66.0}, {"value": 71.0}]}))
+    p_down = s.estimate([mkt(COTTON, mid="a")])["a"]
+    # stocks revised UP 71->76 -> bearish
+    s.bind(ObsSeries(base, {"SIG_COTTON_WASDE": [{"value": 76.0}, {"value": 71.0}]}))
+    p_up = s.estimate([mkt(COTTON, mid="b")])["b"]
+    assert p_down > p_up
+
+
+def test_wasde_min_surprise_gate():
+    s = get_strategy("wasde_event", min_surprise=0.05)
+    s.bind(ObsSeries({"CME_COTTON": {"value": 76.7}},
+                     {"SIG_COTTON_WASDE": [{"value": 71.2}, {"value": 71.0}]}))  # +0.3% only
+    assert s.estimate([mkt(COTTON, mid="x")]) == {}
+
+
 def test_z_helper():
     z, mean, std = sig._z([1, 2, 3, 4, 5], 5)
     assert mean == 3 and z > 0

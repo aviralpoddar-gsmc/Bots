@@ -108,6 +108,36 @@ def compute_fas_balance(max_age_hours: float = 24, recent: int = 4) -> list[Obse
     return out
 
 
+def compute_wasde(max_age_hours: float = 24) -> list[Observation]:
+    """Revision-tracked world cotton ending stocks (million bales), stamped by the
+    USDA report month (Calendar_Year-Month). Each monthly WASDE/circular gets its
+    own ts, so the store accumulates the revision history the wasde_event overlay
+    diffs to get the month-over-month *surprise*. (The bulk file is a snapshot, so
+    history builds up one release at a time.)"""
+    import csv as _csv
+    import io as _io
+    try:
+        text = _download_csv("cotton", max_age_hours)
+    except Exception as exc:
+        logger.warning("signals wasde: %s", exc)
+        return []
+    es = _world_by_year(text, "Ending Stocks", set())
+    if not es:
+        return []
+    yr = max(es)
+    report = None
+    for r in _csv.DictReader(_io.StringIO(text)):
+        if r["Attribute_Description"] == "Ending Stocks" and r["Market_Year"] == str(yr):
+            report = (r["Calendar_Year"], r["Month"])
+            break
+    ts = f"{report[0]}-{report[1]}-01T00:00:00" if report else f"{yr}-08-01T00:00:00"
+    return [Observation(
+        source="signal", entity="SIG_COTTON_WASDE", ts=ts, value=es[yr] / 1000.0,
+        payload={"report": f"{report[0]}-{report[1]}" if report else None,
+                 "marketing_year": yr, "unit": "million_bales"},
+    )]
+
+
 def compute_cftc(commodities: list[str], window: int = 156) -> list[Observation]:
     """Managed-money net-% z-score over a trailing window (default ~3y of weeks)."""
     out: list[Observation] = []
@@ -163,6 +193,7 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     obs: list[Observation] = []
     obs += compute_fas_cotton()
     obs += compute_fas_balance()
+    obs += compute_wasde()
     obs += compute_cftc(commodities)
     obs += compute_weather_cocoa()
     n = store.upsert_observations(obs) if obs else 0
