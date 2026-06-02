@@ -58,12 +58,18 @@ class LLMStrategy(Strategy):
         include_terms: list[str] | None = None,
         exclude_terms: list[str] | None = None,
         no_think: bool = False,
+        timeout: float = 240.0,
+        num_ctx: int = 32768,
         **params: object,
     ):
         super().__init__(model=model, spread_mult=spread_mult, conf_cap=conf_cap,
                          max_groups=max_groups, include_terms=include_terms,
-                         exclude_terms=exclude_terms, no_think=no_think, **params)
-        self.llm = LocalLLM(model=model)
+                         exclude_terms=exclude_terms, no_think=no_think,
+                         timeout=timeout, num_ctx=num_ctx, **params)
+        # Coverage bots override these for speed: a small context window (these
+        # prompts are short — a 32K window just slows prefill) and a short timeout
+        # (a slow ladder abstains fast rather than burning minutes).
+        self.llm = LocalLLM(model=model, timeout=timeout, num_ctx=num_ctx)
         # qwen3 "thinking" mode is slow (long CoT before the answer) and the main
         # cause of timeouts. For COSMETIC coverage, calibration is irrelevant, so
         # appending "/no_think" skips it — much faster. Leave off for alpha bots.

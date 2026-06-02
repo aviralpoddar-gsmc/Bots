@@ -321,13 +321,15 @@ bots:
       max_total_exposure: 6000
       dry_run_sample: 25
     params:
-      model: qwen3:32b
+      model: gemma4:latest      # small/fast (8B, ~11s/ladder) — quality irrelevant for cosmetic
       spread_mult: 1.5          # wider bands: these are obscure quantities -> stay humble
       conf_cap: 0.70
       max_groups: 60            # cover the cocoa/coffee ladders in one run
       include_terms: ["cocoa", "coffee"]
       exclude_terms: ["price", "futures", "basis", "spread", "cents/lb", "USD/t", "/mt", "nearest-futures"]
-      no_think: true            # cosmetic coverage -> skip qwen3 CoT (faster, fewer timeouts)
+      no_think: false           # gemma has no thinking mode (qwen3-only knob)
+      num_ctx: 6144             # small context: these prompts are short; 32K just slows prefill
+      timeout: 75               # cap per-ladder time; a slow ladder abstains (stays 0.50) fast
 
   # === Market-maker (maker MODE — Phase 4) ===
   # `maker: true` switches EXECUTION only: instead of taker market orders, the
