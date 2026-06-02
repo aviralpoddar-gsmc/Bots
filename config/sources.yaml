@@ -96,6 +96,22 @@ sources:
     enabled: true
     params: {}
 
+  # US Drought Monitor DSCI by state (keyless JSON). processing.compute_cotton_drought
+  # deseasonalizes Texas DSCI into SIG_COTTON_DROUGHT for drought_cotton.
+  - name: usdm
+    enabled: true
+    params:
+      states:
+        "48": TX    # Texas = ~40% of US cotton (the only state with clone price markets)
+
+  # ICE certified cocoa warehouse stocks (keyless .xls). processing.compute_cocoa_stocks
+  # z-scores certified bags into SIG_COCOA_STOCK_Z for cocoa_stocks. First ingest
+  # backfills ~3y weekly into data/research/ice/ (gitignored); needs xlrd (in .venv).
+  - name: ice_stocks
+    enabled: true
+    params:
+      backfill_weeks: 156
+
   # CFTC Commitments of Traders (keyless). Single signal source for cftc_positioning.
   - name: cftc
     enabled: true

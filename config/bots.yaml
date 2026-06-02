@@ -504,6 +504,74 @@ bots:
       drift_cap: 0.05            # cap the seasonal nudge at ±5%/yr
       max_horizon_years: 2.0     # SST seasonal signal decays; don't drift far-dated strikes
 
+  # Cotton drought bot (SINGLE SOURCE = US Drought Monitor). Drifts ICE Cotton price
+  # markets on Texas drought severity (DSCI, deseasonalized z) — a weekly, keyless,
+  # LEADING read on crop stress (ahead of the NASS condition print). Targets the 18
+  # ICE Cotton No.2 PRICE markets (which are named-source and plausibly resolvable).
+  # ⚠️ enabled:false — VALIDATION REFUTED the thesis (2026-06-02 walk-forward, 26y
+  # CT=F): deseasonalized TX drought correlates NEGATIVELY with forward cotton returns
+  # (6mo Pearson -0.33 / Spearman -0.26, stable in/out, significant) — the OPPOSITE of
+  # the naive "drought→bullish" supply story. That counterintuitive-but-stable sign is
+  # most likely a CONFOUND (drought regimes co-moving with global supply/macro), not a
+  # tradeable edge. sign set to -1 to match the data, but DO NOT enable without
+  # understanding the mechanism. Kept as a documented dead-end.
+  - name: drought_cotton_1
+    strategy: drought_cotton
+    account_env: DROUGHT_COTTON_1_API_KEY   # own account: @DroughtCottonBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 500
+      liquidity_pct: 0.5
+      max_price_impact: 0.20
+      hold_band: 0.05
+      per_group_pct: 1.0
+      min_ev: 0.05
+      min_resolvability: 0.04    # ICE cotton price markets clear this
+      max_run_budget: 10000
+      max_total_exposure: 10000
+      max_group_exposure: 10000
+      dry_run_sample: 25
+    params:
+      k: 0.03                    # drift per 1σ deseasonalized DSCI (before drift_cap)
+      min_z: 0.7                 # conviction floor: ignore near-seasonal-normal drought
+      sign: -1.0                 # EMPIRICAL (validation): +drought -> bearish cotton 6mo out;
+                                 # naive +1 supply thesis REFUTED. Mechanism unclear -> stays disabled.
+      drift_cap: 0.05            # cap the nudge at ±5%/yr
+      max_horizon_years: 1.5     # drought signal is in-season; don't drift far-dated strikes
+
+  # Cocoa certified-stocks bot (SINGLE SOURCE = ICE certified cocoa stocks). Drifts
+  # ICE cocoa price markets on deliverable-inventory tightness (certified-stock z) —
+  # a daily, keyless, watched supply confirmer, orthogonal to the weather/SST cocoa
+  # bots. Targets the 40 ICE cocoa PRICE markets.
+  # ⚠️ enabled:false — validation INCONCLUSIVE (2026-06-02): only ~15 aligned months
+  # were usable because older ICE .xls files use a different layout the parser skips,
+  # so the backfilled history is too short/recent (and dominated by the 2023-24 stock
+  # collapse) to confirm the sign. Sign (low stock→bullish) is the standard inventory
+  # relationship but UNVALIDATED. To revisit: extend the parser to older layouts for a
+  # deeper backfill, then walk-forward vs cc.f. Mint @CocoaStocksBot at go-live.
+  - name: cocoa_stocks_1
+    strategy: cocoa_stocks
+    account_env: COCOA_STOCKS_1_API_KEY   # own account: @CocoaStocksBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 500
+      liquidity_pct: 0.5
+      max_price_impact: 0.20
+      hold_band: 0.05
+      per_group_pct: 1.0
+      min_ev: 0.05
+      min_resolvability: 0.04    # ICE cocoa price markets clear this
+      max_run_budget: 10000
+      max_total_exposure: 10000
+      max_group_exposure: 10000
+      dry_run_sample: 25
+    params:
+      k: 0.03                    # drift per 1σ certified-stock level (before drift_cap)
+      min_z: 0.7                 # conviction floor: ignore near-normal stock
+      sign: -1.0                 # low stock (z<0) -> tight -> bullish cocoa
+      drift_cap: 0.06            # cap the nudge at ±6%/yr
+      max_horizon_years: 2.0     # stock signal is short-horizon; don't drift far-dated strikes
+
   # Coffee: "global coffee consumption growth rate exceed X%" markets, priced off
   # USDA FAS world coffee consumption. NOTE: demand markets resolve ~0% on the clone,
   # so min_resolvability is 0 to let it act, but exposure is kept small by design.

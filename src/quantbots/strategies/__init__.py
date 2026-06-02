@@ -31,6 +31,8 @@ _REGISTRY: dict[str, str] = {
     "weather_anomaly": "quantbots.strategies.weather_anomaly:WeatherAnomalyStrategy",
     "nass_crop": "quantbots.strategies.nass_crop:NassCropStrategy",
     "cocoa_atlantic": "quantbots.strategies.cocoa_atlantic:CocoaAtlanticStrategy",
+    "drought_cotton": "quantbots.strategies.drought_cotton:DroughtCottonStrategy",
+    "cocoa_stocks": "quantbots.strategies.cocoa_stocks:CocoaStocksStrategy",
     "pair_trading": "quantbots.strategies.pair_trading:PairTradingStrategy",
     "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
     "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",

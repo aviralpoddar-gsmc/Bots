@@ -22,6 +22,8 @@ _REGISTRY: dict[str, str] = {
     "cftc": "quantbots.sources.cftc:CftcSource",           # CFTC Commitments of Traders (keyless Socrata)
     "weather": "quantbots.sources.weather:WeatherSource",  # open-meteo growing-region weather (keyless)
     "atl3": "quantbots.sources.atl3:AtlanticSstSource",    # CPC tropical-Atlantic SST anomaly (keyless)
+    "usdm": "quantbots.sources.usdm:UsdmSource",          # US Drought Monitor DSCI by state (keyless JSON)
+    "ice_stocks": "quantbots.sources.ice_stocks:IceStocksSource",  # ICE certified cocoa stocks (keyless .xls)
 }
 
 

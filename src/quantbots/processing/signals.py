@@ -268,6 +268,63 @@ def compute_atl3_cocoa(window: int = 120) -> list[Observation]:
     )]
 
 
+def compute_cotton_drought() -> list[Observation]:
+    """Texas drought severity (USDM DSCI) z-scored vs a SAME-WEEK-OF-YEAR baseline
+    -> SIG_COTTON_DROUGHT. DSCI is seasonal (summer droughts), so a raw-level z
+    would mark every summer as 'drought' and invert the signal; deseasonalizing by
+    week-of-year fixes that. High drought-z → supply stress → bullish cotton."""
+    import datetime as _dt
+    from collections import defaultdict as _dd
+
+    from ..sources import usdm
+
+    try:
+        hist = usdm.fetch_history("48")
+    except Exception as exc:
+        logger.warning("signals usdm: %s", exc)
+        return []
+    if len(hist) < 104:  # need ~2y of weeks
+        return []
+    by_week: dict[int, list[float]] = _dd(list)
+    for ts, v in hist:
+        wk = _dt.date.fromisoformat(ts[:10]).isocalendar()[1]
+        by_week[wk].append(v)
+    ts_latest, v_latest = hist[-1]
+    wk = _dt.date.fromisoformat(ts_latest[:10]).isocalendar()[1]
+    # Baseline = same week across years; widen to ±2 weeks if a single week is thin.
+    base = [x for x in by_week.get(wk, []) if x != v_latest]
+    if len(base) < 8:
+        base = [v for w, vs in by_week.items() if abs(w - wk) <= 2 for v in vs if v != v_latest]
+    if len(base) < 8:
+        return []
+    z, mean, std = _z(base, v_latest)
+    return [Observation(
+        source="signal", entity="SIG_COTTON_DROUGHT", ts=ts_latest, value=z,
+        payload={"dsci": v_latest, "woy": wk, "woy_mean": mean, "woy_std": std, "n_base": len(base)},
+    )]
+
+
+def compute_cocoa_stocks(window: int = 156) -> list[Observation]:
+    """Z-score the ICE certified cocoa stock vs its trailing history ->
+    SIG_COCOA_STOCK_Z. Low stock (negative z) = tight deliverable supply; the cocoa
+    SIGN is applied by the strategy."""
+    from ..sources import ice_stocks
+    try:
+        hist = ice_stocks.fetch_history()
+    except Exception as exc:
+        logger.warning("signals ice_stocks: %s", exc)
+        return []
+    vals = [v for _, v in hist][-window:]
+    if len(vals) < 24:
+        return []
+    latest = vals[-1]
+    z, mean, std = _z(vals, latest)
+    return [Observation(
+        source="signal", entity="SIG_COCOA_STOCK_Z", ts=hist[-1][0], value=z,
+        payload={"cert_stock": latest, "mean": mean, "std": std, "n": len(vals)},
+    )]
+
+
 def run_all(store: Any, commodities: list[str] | None = None) -> int:
     """Compute all signals and upsert them. Returns count written."""
     commodities = commodities or ["cotton", "cocoa", "coffee"]
@@ -279,6 +336,8 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     obs += compute_weather_cocoa()
     obs += compute_cotton_condition_index(store)
     obs += compute_atl3_cocoa()
+    obs += compute_cotton_drought()
+    obs += compute_cocoa_stocks()
     n = store.upsert_observations(obs) if obs else 0
     logger.info("processing: wrote %d signals (%s)", n, ", ".join(o.entity for o in obs))
     return n
