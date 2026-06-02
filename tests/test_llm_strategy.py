@@ -55,18 +55,20 @@ def test_direction_below_inverts():
 
 
 def test_conf_cap_bounds_extreme_estimates():
-    # Strike far outside a tight band -> CDF ~0/1, but conf_cap must clamp it.
+    # Far-tail strike (in-scale: tight band ~100, strike 97) -> CDF ~1, clamped.
     tight = {"p10": 99, "p25": 99.5, "p50": 100, "p75": 100.5, "p90": 101, "reasoning": "x"}
     s = _strat(tight, spread_mult=1.0, conf_cap=0.75)
-    m = {"id": "a", "question": "Will X exceed 5?", "threshold": 5, "direction": "exceeds"}
+    m = {"id": "a", "question": "Will X exceed 97?", "threshold": 97, "direction": "exceeds"}
     est = s.estimate([m])["a"]
-    assert est == 0.75  # would be ~0.99 uncapped; clamped to the 0.75 ceiling
+    assert est == 0.75  # would be ~0.9999 uncapped; clamped to the 0.75 ceiling
 
 
 def test_conf_cap_clamps_both_sides():
+    # In-scale far-tail strike (103, just above the tight band) -> CDF ~0, clamped.
+    # (Strikes orders of magnitude off the band would trip the scale-sanity guard.)
     tight = {"p10": 99, "p25": 99.5, "p50": 100, "p75": 100.5, "p90": 101, "reasoning": "x"}
     s = _strat(tight, spread_mult=1.0, conf_cap=0.75)
-    m = {"id": "a", "question": "Will X exceed 9999?", "threshold": 9999, "direction": "exceeds"}
+    m = {"id": "a", "question": "Will X exceed 103?", "threshold": 103, "direction": "exceeds"}
     est = s.estimate([m])["a"]
     assert est == 0.25  # 1 - cap
 

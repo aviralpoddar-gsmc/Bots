@@ -113,6 +113,15 @@ class LLMStrategy(Strategy):
             f"Predict the distribution of: {subject}.\n"
             f"Context questions:\n" + "\n".join(f"- {m['question']}" for m in group[:20])
         )
+        # Anchor the model to the ladder's SCALE/UNITS so it doesn't answer on the
+        # wrong order of magnitude (e.g. returning 0.2 when strikes are 250-650k tonnes).
+        strikes = [m["threshold"] for m in group if m.get("threshold") is not None]
+        if strikes:
+            prompt += (
+                f"\nThese questions ask whether the value exceeds thresholds ranging "
+                f"from {min(strikes):g} to {max(strikes):g}. Give p10..p90 as numbers "
+                f"on that SAME scale and units."
+            )
         if self.no_think:
             prompt += "\n/no_think"  # qwen3: skip chain-of-thought for speed
         try:
@@ -140,6 +149,20 @@ class LLMStrategy(Strategy):
         mu = p50
         sigma_raw = 0.5 * ((p90 - p10) / _Z_10_90 + (p75 - p25) / _Z_25_75)
         sigma = max(sigma_raw, 1e-9) * self.spread_mult
+
+        # Scale-sanity backstop: if the model answered on a wildly different order of
+        # magnitude than the ladder's strikes (a unit/scale mistake), the CDF would
+        # pin every strike to the clamp floor — junk. Abstain instead, leaving the
+        # market an honest 0.50 rather than a fake flat ladder.
+        strikes = [m["threshold"] for m in group if m.get("threshold") is not None]
+        if strikes:
+            smid = sorted(strikes)[len(strikes) // 2]
+            center = abs(mu) if abs(mu) > 1e-9 else max(abs(p90 - p10), 1e-9)
+            ratio = smid / center if center > 0 else float("inf")
+            if ratio > 20 or ratio < 0.05:
+                logger.warning("llm: scale mismatch on %r (strikes~%.3g vs model~%.3g) — abstaining",
+                               measurable_key(group[0])[:60], smid, center)
+                return {}
 
         out: dict[str, float] = {}
         for m in group:
