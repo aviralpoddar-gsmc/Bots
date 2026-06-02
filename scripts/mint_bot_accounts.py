@@ -77,6 +77,7 @@ DEFAULT_BOTS: dict[str, tuple[str, str]] = {
     "stockpile_grid_arb_1": ("StockpileGridArbBot", "Stockpile Grid Arb Bot (AP)"),
     "stockpile_coherence_1": ("StockpileCoherenceBot", "Stockpile Coherence Bot (AP)"),
     "market_maker_1": ("MarketMakerBot", "Market Maker Bot (AP)"),
+    "llm_ag_coverage": ("LlmAgCoverageBot", "LLM Ag Coverage Bot (AP)"),
     # USDA softs bots. cotton already minted as @Cottonfundamental1 (display renamed
     # to add the "(AP)" suffix via POST /v0/me/update); listed here for consistency.
     "cotton_fundamental_1": ("Cottonfundamental1", "Cotton Fundamental 1 (AP)"),
