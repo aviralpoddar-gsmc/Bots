@@ -298,6 +298,36 @@ bots:
       conf_cap: 0.75      # never bet >75% conviction (obscure markets -> hallucination risk)
       max_groups: 12      # cap LLM calls per run (~50s each on 32b)
 
+  # === COSMETIC DEMO COVERAGE (local LLM) — the cocoa/coffee "50% sea" ===
+  # These quantity/demand markets have NO fundamental data source (cocoa isn't in
+  # FAS PSD; coffee has no price markets) and ~never resolve, so no anchored bot can
+  # price them. This bot uses the LOCAL LLM to reason a fair value per measurable
+  # ladder purely so the markets move off 0.50 for the demo. It is NOT an alpha bot:
+  # targets cancel-prone markets (capital-neutral, ~zero expected PnL); kept tiny.
+  # Scoped to cocoa/coffee and EXCLUDES price markets (other bots own those).
+  # enabled:false; the full run is slow (~50s/ladder on 32b) — run on demand to
+  # populate the demo. Mint @LlmAgCoverageBot at go-live; dry-run via an existing key.
+  - name: llm_ag_coverage
+    strategy: llm
+    account_env: LLM_AG_COVERAGE_API_KEY
+    enabled: false
+    limits:
+      max_order_size: 12        # tiny: just nudge off 0.50, don't slam
+      liquidity_pct: 0.15
+      hold_band: 0.05
+      min_ev: 0.0               # cosmetic coverage: do not gate on EV
+      min_resolvability: 0.0    # deliberately trade the non-resolving sea (capital-neutral)
+      max_run_budget: 3000
+      max_total_exposure: 6000
+      dry_run_sample: 25
+    params:
+      model: qwen3:32b
+      spread_mult: 1.5          # wider bands: these are obscure quantities -> stay humble
+      conf_cap: 0.70
+      max_groups: 60            # cover the cocoa/coffee ladders over a (slow) run
+      include_terms: ["cocoa", "coffee"]
+      exclude_terms: ["price", "futures", "basis", "spread", "cents/lb", "USD/t", "/mt", "nearest-futures"]
+
   # === Market-maker (maker MODE — Phase 4) ===
   # `maker: true` switches EXECUTION only: instead of taker market orders, the
   # runner posts two-sided RESTING limit quotes around this bot's own fair value

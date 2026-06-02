@@ -17,6 +17,7 @@ Uses `quantbots.llm.client`, which talks to a LOCAL OpenAI-compatible endpoint
 from __future__ import annotations
 
 import json
+import re
 
 from ._model import norm_cdf
 from ..llm.client import LocalLLM
@@ -51,11 +52,19 @@ class LLMStrategy(Strategy):
         spread_mult: float = 1.5,
         conf_cap: float = 0.80,
         max_groups: int = 20,
+        include_terms: list[str] | None = None,
+        exclude_terms: list[str] | None = None,
         **params: object,
     ):
         super().__init__(model=model, spread_mult=spread_mult, conf_cap=conf_cap,
-                         max_groups=max_groups, **params)
+                         max_groups=max_groups, include_terms=include_terms,
+                         exclude_terms=exclude_terms, **params)
         self.llm = LocalLLM(model=model)
+        # Optional scoping (for coverage bots): only price markets whose question
+        # matches include_terms and matches none of exclude_terms. E.g. cover the
+        # cocoa/coffee quantity "sea" while excluding price markets other bots own.
+        self.include_re = re.compile("|".join(include_terms), re.I) if include_terms else None
+        self.exclude_re = re.compile("|".join(exclude_terms), re.I) if exclude_terms else None
         # Local models are overconfident (benchmark: ~57-71% coverage vs ideal ~80%),
         # so their p10-p90 bands are too narrow. Widen the percentile spread by this
         # factor before reading probabilities off the CDF.
@@ -71,8 +80,17 @@ class LLMStrategy(Strategy):
 
     def prefilter(self, markets: list[Market]) -> list[Market]:
         markets = super().prefilter(markets)
-        return [m for m in (attach_ladder_fields(m) for m in markets)
-                if m.get("threshold") is not None]
+        out: list[Market] = []
+        for m in (attach_ladder_fields(m) for m in markets):
+            if m.get("threshold") is None:
+                continue
+            q = m.get("question", "")
+            if self.include_re and not self.include_re.search(q):
+                continue
+            if self.exclude_re and self.exclude_re.search(q):
+                continue
+            out.append(m)
+        return out
 
     def group(self, markets: list[Market]) -> list[list[Market]]:
         groups: dict[str, list[Market]] = {}
