@@ -187,6 +187,67 @@ def compute_weather_cocoa(start: str | None = None, end: str | None = None) -> l
     )]
 
 
+# US upland cotton production shares (approx, recent NASS — refresh if they drift).
+# Used to weight per-state crop condition into a national yield proxy. Weights are
+# renormalized over whichever states actually have data, so missing states are safe.
+_COTTON_STATE_WEIGHTS = {"TX": 0.42, "GA": 0.16, "AR": 0.09, "MS": 0.08, "NC": 0.06}
+
+
+def compute_cotton_condition_index(store: Any) -> list[Observation]:
+    """Production-weighted US cotton good+excellent % -> SIG_COTTON_COND_IDX.
+
+    Sharper than the national NASS print: a single stressed major state (e.g. a
+    Texas drought) moves the index even when the national average looks healthy.
+    Reads the per-state NASS_COTTON_COND_GE_<ST> observations the nass source
+    ingested; falls back to the national NASS_COTTON_COND_GE when no state data is
+    present (so the bot degrades gracefully to its old behaviour, never worse).
+    """
+    # Collect (state, value, ts, year). NASS condition is seasonal and per-state
+    # publication weeks differ, so a state can return LAST season's final reading
+    # when this season's isn't out yet — blending it would mix seasons and can flip
+    # the sign. So keep only states from the most recent season (max year present).
+    cand: list[tuple[str, float, str, int]] = []
+    for st in _COTTON_STATE_WEIGHTS:
+        o = store.latest_observation(f"NASS_COTTON_COND_GE_{st}")
+        if not o or o.get("value") is None:
+            continue
+        ts = o.get("ts") or ""
+        try:
+            yr = int(ts[:4])
+        except (ValueError, TypeError):
+            yr = 0
+        cand.append((st, o["value"], ts, yr))
+    num = den = 0.0
+    parts: dict[str, float] = {}
+    latest_ts = ""
+    if cand:
+        max_year = max(c[3] for c in cand)
+        for st, val, ts, yr in cand:
+            if yr != max_year:
+                continue  # stale (prior-season) reading — exclude
+            w = _COTTON_STATE_WEIGHTS[st]
+            parts[st] = val
+            num += val * w
+            den += w
+            latest_ts = max(latest_ts, ts)
+    if den > 0:
+        idx = num / den  # renormalized over present states
+        return [Observation(
+            source="signal", entity="SIG_COTTON_COND_IDX",
+            ts=latest_ts or "1970-01-01T00:00:00", value=idx,
+            payload={"by_state": parts, "weights": _COTTON_STATE_WEIGHTS, "n_states": len(parts)},
+        )]
+    # Fallback: national print, so the index entity always exists if any data does.
+    o = store.latest_observation("NASS_COTTON_COND_GE")
+    if o and o.get("value") is not None:
+        return [Observation(
+            source="signal", entity="SIG_COTTON_COND_IDX",
+            ts=o.get("ts") or "1970-01-01T00:00:00", value=o["value"],
+            payload={"fallback": "national"},
+        )]
+    return []
+
+
 def run_all(store: Any, commodities: list[str] | None = None) -> int:
     """Compute all signals and upsert them. Returns count written."""
     commodities = commodities or ["cotton", "cocoa", "coffee"]
@@ -196,6 +257,7 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     obs += compute_wasde()
     obs += compute_cftc(commodities)
     obs += compute_weather_cocoa()
+    obs += compute_cotton_condition_index(store)
     n = store.upsert_observations(obs) if obs else 0
     logger.info("processing: wrote %d signals (%s)", n, ", ".join(o.entity for o in obs))
     return n

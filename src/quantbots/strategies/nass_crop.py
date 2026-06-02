@@ -26,15 +26,21 @@ class NassCropStrategy(SignalDriftStrategy):
     CATALOG = [(re.compile(r"\bcotton\b", re.I), "CME_COTTON", 0.24)]
 
     def __init__(self, cond_ref: float = 50.0, k: float = 0.003, min_dev: float = 5.0,
-                 cond_entity: str = "NASS_COTTON_COND_GE", **params: Any):
+                 cond_entity: str = "SIG_COTTON_COND_IDX",
+                 fallback_entity: str = "NASS_COTTON_COND_GE", **params: Any):
         super().__init__(**params)
         self.cond_ref = cond_ref   # reference good+excellent %
         self.k = k                 # drift per percentage-point deviation
         self.min_dev = min_dev     # meaningful-trade gate: ignore small deviations
+        # Prefer the production-weighted per-state index; fall back to the national
+        # print if processing hasn't produced the index (e.g. no per-state data yet).
         self.cond_entity = cond_entity
+        self.fallback_entity = fallback_entity
 
     def signal_drift(self, spot: float, price_entity: str, T: float):
         o = self._obs.latest_observation(self.cond_entity)
+        if (not o or o.get("value") is None) and self.fallback_entity:
+            o = self._obs.latest_observation(self.fallback_entity)
         if not o or o.get("value") is None:
             return None
         cond = o["value"]

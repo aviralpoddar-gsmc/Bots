@@ -75,11 +75,20 @@ sources:
     enabled: true
     params:
       series:
+        # National good+excellent % — fallback for the production-weighted index.
         - entity: NASS_COTTON_COND_GE
           agg_level_desc: NATIONAL
-          sum_short_desc:
+          sum_short_desc: &cotton_cond_ge
             - "COTTON, UPLAND - CONDITION, MEASURED IN PCT GOOD"
             - "COTTON, UPLAND - CONDITION, MEASURED IN PCT EXCELLENT"
+        # Per-state condition for the top US cotton states. processing/signals.py
+        # production-weights these into SIG_COTTON_COND_IDX — a sharper yield proxy
+        # than the national % (regional weather stress isn't masked by good states).
+        - { entity: NASS_COTTON_COND_GE_TX, agg_level_desc: STATE, state_name: TEXAS, sum_short_desc: *cotton_cond_ge }
+        - { entity: NASS_COTTON_COND_GE_GA, agg_level_desc: STATE, state_name: GEORGIA, sum_short_desc: *cotton_cond_ge }
+        - { entity: NASS_COTTON_COND_GE_AR, agg_level_desc: STATE, state_name: ARKANSAS, sum_short_desc: *cotton_cond_ge }
+        - { entity: NASS_COTTON_COND_GE_MS, agg_level_desc: STATE, state_name: MISSISSIPPI, sum_short_desc: *cotton_cond_ge }
+        - { entity: NASS_COTTON_COND_GE_NC, agg_level_desc: STATE, state_name: "NORTH CAROLINA", sum_short_desc: *cotton_cond_ge }
 
   # CFTC Commitments of Traders (keyless). Single signal source for cftc_positioning.
   - name: cftc

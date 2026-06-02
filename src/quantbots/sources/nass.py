@@ -77,6 +77,11 @@ class NassSource(Source):
             "short_desc": short_desc, "agg_level_desc": extra.get("agg_level_desc", "NATIONAL"),
             "format": "JSON", "year__GE": str(extra.get("year_ge", 2018)),
         }
+        # Per-state series: set agg_level_desc: STATE and state_name (e.g. "TEXAS")
+        # in the series config to pull one state's condition for the weighted index.
+        state = extra.get("state_name")
+        if state:
+            params["state_name"] = state
         resp = requests.get(_URL, params=params, timeout=45)
         if resp.status_code != 200:
             return []
