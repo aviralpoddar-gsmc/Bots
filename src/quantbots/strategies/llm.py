@@ -17,12 +17,15 @@ Uses `quantbots.llm.client`, which talks to a LOCAL OpenAI-compatible endpoint
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from ._model import norm_cdf
 from ..llm.client import LocalLLM
 from .base import Market, Strategy
 from .ladder import attach_ladder_fields, measurable_key
+
+logger = logging.getLogger(__name__)
 
 _KEYS = ["p10", "p25", "p50", "p75", "p90"]
 # z-scores of the 10/90 and 25/75 percentile pairs of a standard normal.
@@ -54,12 +57,17 @@ class LLMStrategy(Strategy):
         max_groups: int = 20,
         include_terms: list[str] | None = None,
         exclude_terms: list[str] | None = None,
+        no_think: bool = False,
         **params: object,
     ):
         super().__init__(model=model, spread_mult=spread_mult, conf_cap=conf_cap,
                          max_groups=max_groups, include_terms=include_terms,
-                         exclude_terms=exclude_terms, **params)
+                         exclude_terms=exclude_terms, no_think=no_think, **params)
         self.llm = LocalLLM(model=model)
+        # qwen3 "thinking" mode is slow (long CoT before the answer) and the main
+        # cause of timeouts. For COSMETIC coverage, calibration is irrelevant, so
+        # appending "/no_think" skips it — much faster. Leave off for alpha bots.
+        self.no_think = no_think
         # Optional scoping (for coverage bots): only price markets whose question
         # matches include_terms and matches none of exclude_terms. E.g. cover the
         # cocoa/coffee quantity "sea" while excluding price markets other bots own.
@@ -105,7 +113,14 @@ class LLMStrategy(Strategy):
             f"Predict the distribution of: {subject}.\n"
             f"Context questions:\n" + "\n".join(f"- {m['question']}" for m in group[:20])
         )
-        raw = self.llm.json_completion(system=_SYSTEM, user=prompt)
+        if self.no_think:
+            prompt += "\n/no_think"  # qwen3: skip chain-of-thought for speed
+        try:
+            raw = self.llm.json_completion(system=_SYSTEM, user=prompt)
+        except Exception as e:  # noqa: BLE001 - LLM timeout/error on one ladder must
+            # not crash the whole run; abstain on this ladder and move on.
+            logger.warning("llm: ladder %r failed (%s) — abstaining", subject[:60], type(e).__name__)
+            return None
         try:
             pct = json.loads(raw)
             if all(k in pct for k in _KEYS):

@@ -324,9 +324,10 @@ bots:
       model: qwen3:32b
       spread_mult: 1.5          # wider bands: these are obscure quantities -> stay humble
       conf_cap: 0.70
-      max_groups: 60            # cover the cocoa/coffee ladders over a (slow) run
+      max_groups: 60            # cover the cocoa/coffee ladders in one run
       include_terms: ["cocoa", "coffee"]
       exclude_terms: ["price", "futures", "basis", "spread", "cents/lb", "USD/t", "/mt", "nearest-futures"]
+      no_think: true            # cosmetic coverage -> skip qwen3 CoT (faster, fewer timeouts)
 
   # === Market-maker (maker MODE — Phase 4) ===
   # `maker: true` switches EXECUTION only: instead of taker market orders, the

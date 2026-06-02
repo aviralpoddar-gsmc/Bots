@@ -32,14 +32,19 @@ class LocalLLM:
         base_url: str | None = None,
         api_key: str | None = None,
         num_ctx: int = DEFAULT_NUM_CTX,
+        timeout: float = 240.0,
     ):
         from openai import OpenAI  # imported lazily so the extra is optional
 
         self.model = model or DEFAULT_MODEL
         self.num_ctx = num_ctx
+        # Explicit per-request timeout: a slow "thinking" generation on a big local
+        # model should fail FAST so the caller can abstain on that one item and move
+        # on, not hang on the SDK's 600s default and (uncaught) crash a whole run.
         self.client = OpenAI(
             base_url=base_url or DEFAULT_BASE_URL,
             api_key=api_key or os.environ.get("QUANTBOTS_LLM_API_KEY", "ollama"),
+            timeout=timeout,
         )
 
     def json_completion(self, system: str, user: str, temperature: float = 0.0) -> str:
