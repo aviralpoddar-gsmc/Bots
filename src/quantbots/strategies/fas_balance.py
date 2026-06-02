@@ -43,9 +43,19 @@ class FasBalanceStrategy(Strategy):
         "forecast horizon."
     )
 
-    def __init__(self, rel_std: float = 0.04, **params: Any):
-        super().__init__(rel_std=rel_std, **params)
+    def __init__(self, rel_std: float = 0.04, extrap_widen: float = 0.6,
+                 max_extrap_years: int = 4, **params: Any):
+        super().__init__(rel_std=rel_std, extrap_widen=extrap_widen,
+                         max_extrap_years=max_extrap_years, **params)
         self.rel_std = rel_std  # FAS forecast revision uncertainty as a fraction of the value
+        # COVERAGE: FAS only forecasts ~1-2 marketing years out, but the clone lists
+        # quantity markets several years ahead. Rather than abstain (leaving them at
+        # 0.50), carry the latest FAS balance forward and WIDEN the band per year
+        # beyond the forecast horizon — so far-dated markets get a humble-but-real
+        # fair value instead of a coin flip. extrap_widen = extra band fraction per
+        # extrapolated year; max_extrap_years caps how far we'll carry forward.
+        self.extrap_widen = extrap_widen
+        self.max_extrap_years = max_extrap_years
         self._obs: Any | None = None
 
     def bind(self, observations: Any) -> None:
@@ -64,8 +74,13 @@ class FasBalanceStrategy(Strategy):
     def correlation_key(self, market: Market) -> str:
         return self._entity(market.get("question", "")) or str(market.get("id"))
 
-    def _fas_value(self, entity: str, question: str) -> tuple[float, int] | None:
-        """FAS value (million bales) for the marketing year the market references."""
+    def _fas_value(self, entity: str, question: str) -> tuple[float, int, int] | None:
+        """FAS value for the marketing year the market references, plus how many
+        years it was extrapolated beyond FAS's forecast horizon (0 = exact match).
+
+        Far-dated markets (the clone lists them years out, past FAS's ~1-2yr
+        horizon) carry the latest available marketing year's value forward rather
+        than abstaining; `estimate` widens the band per extrapolated year."""
         o = self._obs.latest_observation(entity) if self._obs else None
         if not o:
             return None
@@ -81,7 +96,12 @@ class FasBalanceStrategy(Strategy):
             return None
         my = max(years) - 1  # cotton MY ending year Y == PSD market year Y-1
         v = by_my.get(str(my))
-        return (float(v), my) if v is not None else None
+        if v is not None:
+            return float(v), my, 0
+        avail = sorted(int(k) for k in by_my)
+        if avail and my > avail[-1] and (my - avail[-1]) <= self.max_extrap_years:
+            return float(by_my[str(avail[-1])]), my, my - avail[-1]
+        return None  # past marketing year, or beyond the carry-forward cap -> abstain
 
     def estimate(self, group: list[Market]) -> dict[str, float]:
         if self._obs is None:
@@ -98,16 +118,19 @@ class FasBalanceStrategy(Strategy):
             threshold, direction = parsed
             fv = self._fas_value(entity, q)
             if fv is None:
-                continue  # FAS has no forecast for this marketing year -> abstain
-            value, my = fv
-            sigma = max(self.rel_std * value, 1e-6)
+                continue  # FAS has no value within the carry-forward horizon -> abstain
+            value, my, extrap = fv
+            # Widen the band per extrapolated year so far-dated carry-forward fair
+            # values stay humble (more uncertain the further past FAS's forecast).
+            sigma = max(self.rel_std * value * (1.0 + self.extrap_widen * extrap), 1e-6)
             surv = 1.0 - norm_cdf((threshold - value) / sigma)  # P(value > threshold)
             p = surv if direction == "exceeds" else 1.0 - surv
             p = min(max(p, 0.01), 0.99)
             out[m["id"]] = p
             self._explanations[m["id"]] = {
                 "entity": entity, "fas_value": value, "marketing_year": my,
-                "threshold": threshold, "direction": direction, "sigma": sigma, "p": p,
+                "threshold": threshold, "direction": direction, "sigma": sigma,
+                "p": p, "extrap": extrap,
             }
         return out
 
@@ -115,9 +138,11 @@ class FasBalanceStrategy(Strategy):
         d = self._explanations.get(market_id)
         if not d:
             return None
+        carry = (f" (carried forward {d['extrap']}y past FAS's horizon, band widened)"
+                 if d.get("extrap") else "")
         return (
             f"- USDA FAS forecast ({d['entity'].replace('SIG_COTTON_', '').replace('_', ' ').lower()}, "
-            f"MY {d['marketing_year']}): **{d['fas_value']:.1f} M bales**\n"
+            f"MY {d['marketing_year']}): **{d['fas_value']:.1f} M bales**{carry}\n"
             f"- Threshold: **{d['threshold']:.1f}** ({d['direction']}), band σ={d['sigma']:.1f} "
             f"→ P({d['direction']})=**{d['p']:.3f}**"
         )
