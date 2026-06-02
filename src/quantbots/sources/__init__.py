@@ -21,6 +21,7 @@ _REGISTRY: dict[str, str] = {
     "nass": "quantbots.sources.nass:NassSource",           # USDA NASS QuickStats (keyed; optional)
     "cftc": "quantbots.sources.cftc:CftcSource",           # CFTC Commitments of Traders (keyless Socrata)
     "weather": "quantbots.sources.weather:WeatherSource",  # open-meteo growing-region weather (keyless)
+    "atl3": "quantbots.sources.atl3:AtlanticSstSource",    # CPC tropical-Atlantic SST anomaly (keyless)
 }
 
 

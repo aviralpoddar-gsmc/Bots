@@ -474,6 +474,36 @@ bots:
       annual_vol: 0.40           # cocoa realized vol (full ~35%, recent 2y far higher)
       max_horizon_years: 4.0     # cover far-dated cocoa price markets
 
+  # Cocoa Atlantic-Niño bot (SINGLE SOURCE = CPC tropical-Atlantic SST). Drifts the
+  # cocoa price anchor on the equatorial-Atlantic SST anomaly (a seasonal West-Africa
+  # rainfall driver, ~70% of cocoa). Targets ICE cocoa PRICE markets (which resolve).
+  # ⚠️ enabled:false — the cocoa SIGN is UNVALIDATED (warm Atlantic could be bullish
+  # via black-pod disease or bearish via better crop). Walk-forward check z vs cc.f,
+  # then flip enabled:true. Mint @CocoaAtlanticBot at go-live; for a dry-run point
+  # account_env at an existing key (e.g. COCOA_FUNDAMENTAL_1_API_KEY).
+  - name: cocoa_atlantic_1
+    strategy: cocoa_atlantic
+    account_env: COCOA_ATLANTIC_1_API_KEY   # own account: @CocoaAtlanticBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 500
+      liquidity_pct: 0.5
+      max_price_impact: 0.20
+      hold_band: 0.05
+      per_group_pct: 1.0
+      min_ev: 0.05
+      min_resolvability: 0.04    # ICE cocoa price markets clear this
+      max_run_budget: 10000
+      max_total_exposure: 10000
+      max_group_exposure: 10000
+      dry_run_sample: 25
+    params:
+      k: 0.02                    # drift per 1σ SST anomaly (before drift_cap)
+      min_z: 0.5                 # conviction floor: ignore a near-normal Atlantic
+      sign: -1.0                 # TENTATIVE: warm Atlantic -> more rain -> better crop -> bearish
+      drift_cap: 0.05            # cap the seasonal nudge at ±5%/yr
+      max_horizon_years: 2.0     # SST seasonal signal decays; don't drift far-dated strikes
+
   # Coffee: "global coffee consumption growth rate exceed X%" markets, priced off
   # USDA FAS world coffee consumption. NOTE: demand markets resolve ~0% on the clone,
   # so min_resolvability is 0 to let it act, but exposure is kept small by design.

@@ -90,6 +90,12 @@ sources:
         - { entity: NASS_COTTON_COND_GE_MS, agg_level_desc: STATE, state_name: MISSISSIPPI, sum_short_desc: *cotton_cond_ge }
         - { entity: NASS_COTTON_COND_GE_NC, agg_level_desc: STATE, state_name: "NORTH CAROLINA", sum_short_desc: *cotton_cond_ge }
 
+  # Tropical-Atlantic SST anomaly (keyless CPC) — ATL3 proxy, cocoa rainfall driver.
+  # processing.compute_atl3_cocoa z-scores it into SIG_ATL3_COCOA for cocoa_atlantic.
+  - name: atl3
+    enabled: true
+    params: {}
+
   # CFTC Commitments of Traders (keyless). Single signal source for cftc_positioning.
   - name: cftc
     enabled: true

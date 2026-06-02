@@ -19,7 +19,7 @@ import math
 import statistics
 from typing import Any
 
-from ..sources import cftc, weather
+from ..sources import atl3, cftc, weather
 from ..sources.base import Observation
 from ..sources.fas_psd import _download_csv, _world_by_year
 
@@ -248,6 +248,26 @@ def compute_cotton_condition_index(store: Any) -> list[Observation]:
     return []
 
 
+def compute_atl3_cocoa(window: int = 120) -> list[Observation]:
+    """Z-score the tropical-Atlantic SST anomaly over a trailing window (~10y of
+    months) -> SIG_ATL3_COCOA. Warm anomaly -> positive z; the cocoa SIGN is
+    applied by the strategy (unvalidated)."""
+    try:
+        hist = atl3.fetch_history()
+    except Exception as exc:
+        logger.warning("signals atl3: %s", exc)
+        return []
+    vals = [v for _, v in hist][-window:]
+    if len(vals) < 24:
+        return []
+    latest = vals[-1]
+    z, mean, std = _z(vals, latest)
+    return [Observation(
+        source="signal", entity="SIG_ATL3_COCOA", ts=hist[-1][0], value=z,
+        payload={"anom": latest, "mean": mean, "std": std, "n": len(vals)},
+    )]
+
+
 def run_all(store: Any, commodities: list[str] | None = None) -> int:
     """Compute all signals and upsert them. Returns count written."""
     commodities = commodities or ["cotton", "cocoa", "coffee"]
@@ -258,6 +278,7 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     obs += compute_cftc(commodities)
     obs += compute_weather_cocoa()
     obs += compute_cotton_condition_index(store)
+    obs += compute_atl3_cocoa()
     n = store.upsert_observations(obs) if obs else 0
     logger.info("processing: wrote %d signals (%s)", n, ", ".join(o.entity for o in obs))
     return n
