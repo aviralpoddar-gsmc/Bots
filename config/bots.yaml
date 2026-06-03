@@ -106,6 +106,51 @@ bots:
         BRENT_OIL: 0.39
         GASOLINE: 0.45
 
+  # Monte-Carlo stochastic-diffusion pricer (SAME markets as commodity_spot_1, fat-tail
+  # pricing). Subclasses commodity_spot but prices each strike off a block-bootstrap
+  # simulation of historical daily returns instead of the closed-form lognormal —
+  # capturing jumps/fat tails on far-from-spot strikes. Pure numpy; needs the `research`
+  # extra (yfinance history); falls back to lognormal per-commodity if history is missing.
+  # ⚠️ enabled:false — BACKTEST GATE RUN 2026-06-03 (GOLD+WTI, 5y monthly, 3mo horizon):
+  # diffusion is marginally better-CALIBRATED (Brier GOLD 0.0765->0.0754, WTI 0.1205->
+  # 0.1170) but PnL is a WASH (ROI GOLD tie 0.891; WTI slightly worse 0.805->0.797) —
+  # and the comparison is LOOKAHEAD-inflated (calibrated on full history), so the real
+  # walk-forward edge is smaller still. Verdict: tail-only, not a meaningful edge over
+  # the closed-form lognormal -> stays DISABLED (built + validated, correctly parked).
+  # Trades the IDENTICAL strikes as commodity_spot_1 (own account, no commingled
+  # exposure). Revisit only with a walk-forward recalibration or on a fatter-tailed
+  # commodity. Mint @DiffusionMcBot at go-live; dry-run via COMMODITY_SPOT_1_API_KEY.
+  - name: diffusion_mc_1
+    strategy: diffusion_mc
+    account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
+    enabled: false
+    limits:
+      max_order_size: 100
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.05
+      max_run_budget: 50000
+      per_group_pct: 0.30
+      min_ev: 0.05
+      dry_run_sample: 25
+      max_total_exposure: 18000
+      max_group_exposure: 5000
+    params:
+      period: 3y               # yfinance history window for calibration (cached pickles)
+      n_sims: 20000            # MC paths (SE ~0.0035 << hold_band; fixed-seed deterministic)
+      block_len: 10            # bootstrap block (trading days) — preserves vol clustering
+      min_returns: 250         # need >=1y of returns to calibrate; else lognormal fallback
+      min_vol: 0.05
+      vols:                    # used only for the lognormal fallback + comment reference
+        GOLD: 0.16
+        SILVER: 0.30
+        PLATINUM: 0.22
+        PALLADIUM: 0.30
+        COPPER: 0.21
+        WTI_OIL: 0.40
+        BRENT_OIL: 0.39
+        GASOLINE: 0.45
+
   # Convergence overlay: commodity_spot's lognormal + a mean-reversion drift from
   # a currently-dislocated cointegrated pair (β / spread / OU half-life fit by the
   # research layer from cached yfinance history). Fires only on legs of pairs

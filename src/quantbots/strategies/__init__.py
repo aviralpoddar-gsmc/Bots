@@ -20,6 +20,7 @@ _REGISTRY: dict[str, str] = {
     "enso": "quantbots.strategies.enso:EnsoStrategy",
     "commodity_futures": "quantbots.strategies.commodity_futures:CommodityFuturesStrategy",
     "commodity_spot": "quantbots.strategies.commodity_spot:CommoditySpotStrategy",
+    "diffusion_mc": "quantbots.strategies.diffusion_mc:DiffusionMcStrategy",
     "cotton_fundamental": "quantbots.strategies.cotton_fundamental:CottonFundamentalStrategy",
     "cocoa_fundamental": "quantbots.strategies.cocoa_fundamental:CocoaFundamentalStrategy",
     "coffee_consumption": "quantbots.strategies.coffee_consumption:CoffeeConsumptionStrategy",
