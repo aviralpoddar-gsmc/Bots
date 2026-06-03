@@ -115,11 +115,15 @@ bots:
   # GOLD+WTI): NO consistent edge. GOLD diffusion WORSE (Brier 0.0865->0.0884, ROI tie);
   # WTI better-calibrated (Brier 0.1285->0.1192) but WORSE PnL (ROI 0.900->0.835). The
   # earlier full-history gate that looked marginally better was lookahead inflation. The
-  # fat-tail refinement doesn't translate to realized edge at these months-long horizons
-  # (CLT washes the tails toward normal). Verdict: keep DISABLED — built + rigorously
-  # validated, no edge over the closed-form lognormal. Trades the IDENTICAL strikes as
-  # commodity_spot_1 (own account). Revisit only for a fatter-tailed / shorter-horizon
-  # market. Mint @DiffusionMcBot at go-live; dry-run via COMMODITY_SPOT_1_API_KEY.
+  # fat-tail refinement doesn't translate to realized edge. FAIR-SHOT confirmed: re-ran on
+  # the FATTEST-tailed / SHORTEST-horizon regime (PALLADIUM/GASOLINE/WTI, excess-kurt
+  # 25-78, ~3wk horizon — diffusion's best case) and it STILL loses: often better-
+  # CALIBRATED (Brier) but ALWAYS worse PnL (ROI -0.024..-0.117), because honest fat tails
+  # make it less confident on extreme strikes that rarely hit, so the lognormal's tail-
+  # OVERconfidence is rewarded on these range-bound markets. FINAL: keep DISABLED — built
+  # + exhaustively validated, no PnL edge over the closed-form lognormal in any regime.
+  # Trades the IDENTICAL strikes as commodity_spot_1 (own account). Mint @DiffusionMcBot
+  # only if a genuinely different use-case appears; dry-run via COMMODITY_SPOT_1_API_KEY.
   - name: diffusion_mc_1
     strategy: diffusion_mc
     account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
