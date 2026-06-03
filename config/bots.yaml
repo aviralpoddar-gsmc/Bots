@@ -111,15 +111,15 @@ bots:
   # simulation of historical daily returns instead of the closed-form lognormal —
   # capturing jumps/fat tails on far-from-spot strikes. Pure numpy; needs the `research`
   # extra (yfinance history); falls back to lognormal per-commodity if history is missing.
-  # ⚠️ enabled:false — BACKTEST GATE RUN 2026-06-03 (GOLD+WTI, 5y monthly, 3mo horizon):
-  # diffusion is marginally better-CALIBRATED (Brier GOLD 0.0765->0.0754, WTI 0.1205->
-  # 0.1170) but PnL is a WASH (ROI GOLD tie 0.891; WTI slightly worse 0.805->0.797) —
-  # and the comparison is LOOKAHEAD-inflated (calibrated on full history), so the real
-  # walk-forward edge is smaller still. Verdict: tail-only, not a meaningful edge over
-  # the closed-form lognormal -> stays DISABLED (built + validated, correctly parked).
-  # Trades the IDENTICAL strikes as commodity_spot_1 (own account, no commingled
-  # exposure). Revisit only with a walk-forward recalibration or on a fatter-tailed
-  # commodity. Mint @DiffusionMcBot at go-live; dry-run via COMMODITY_SPOT_1_API_KEY.
+  # ⚠️ enabled:false — WALK-FORWARD GATE (2026-06-03, train/test split, lookahead-free,
+  # GOLD+WTI): NO consistent edge. GOLD diffusion WORSE (Brier 0.0865->0.0884, ROI tie);
+  # WTI better-calibrated (Brier 0.1285->0.1192) but WORSE PnL (ROI 0.900->0.835). The
+  # earlier full-history gate that looked marginally better was lookahead inflation. The
+  # fat-tail refinement doesn't translate to realized edge at these months-long horizons
+  # (CLT washes the tails toward normal). Verdict: keep DISABLED — built + rigorously
+  # validated, no edge over the closed-form lognormal. Trades the IDENTICAL strikes as
+  # commodity_spot_1 (own account). Revisit only for a fatter-tailed / shorter-horizon
+  # market. Mint @DiffusionMcBot at go-live; dry-run via COMMODITY_SPOT_1_API_KEY.
   - name: diffusion_mc_1
     strategy: diffusion_mc
     account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
