@@ -18,7 +18,10 @@ LIVE_FLAG="--live"
 [ "${QUANTBOTS_LIVE:-1}" = "0" ] && LIVE_FLAG=""
 
 # Bots to run each cycle, in priority order. Add new bot names here as they ship.
-BOTS=("commodity_spot_1" "ladder_arb_1" "term_structure_1" \
+# diffusion_mc_1 replaced commodity_spot_1 on 2026-06-04 (kernel-smoothed bootstrap pricer,
+# dominates the lognormal on the walk-forward gate; prices the same strikes, so commodity_spot_1
+# is disabled — do NOT add it back here without removing diffusion_mc_1).
+BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
       "stockpile_facts_1" "stockpile_grid_arb_1" "stockpile_coherence_1" "pair_trading_1" \
       "cotton_fundamental_1" "cftc_softs_1" "weather_cocoa_1" "nass_cotton_1" \
       "cocoa_fundamental_1" "coffee_consumption_1" "fas_balance_1" "wasde_cotton_1" \

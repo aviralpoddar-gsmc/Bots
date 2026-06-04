@@ -76,7 +76,11 @@ bots:
   - name: commodity_spot_1
     strategy: commodity_spot
     account_env: COMMODITY_SPOT_1_API_KEY   # own account: @CommoditySpotBot
-    enabled: true
+    # DISABLED 2026-06-04 — superseded by diffusion_mc_1 (kernel-smoothed bootstrap), which
+    # prices the IDENTICAL strikes and strictly dominates the lognormal on the multi-fold
+    # walk-forward gate (Brier/PnL/Sharpe/worst-fold). Must not run both: same legs -> double
+    # exposure / crossed orders. Re-enable only if reverting the promotion (then disable diffusion_mc_1).
+    enabled: false
     limits:
       # Size to liquidity and only NUDGE prices — scale comes from breadth (many
       # markets), not from slamming any one market. Repeated runs converge a
@@ -130,8 +134,8 @@ bots:
   # via COMMODITY_SPOT_1_API_KEY.
   - name: diffusion_mc_1
     strategy: diffusion_mc
-    account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
-    enabled: false
+    account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (minted 2026-06-04, Ṁ100k)
+    enabled: true            # PROMOTED 2026-06-04 — replaces commodity_spot_1 (gate passed); commodity_spot_1 disabled
     limits:
       max_order_size: 100
       liquidity_pct: 0.25
