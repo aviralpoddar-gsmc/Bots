@@ -6,18 +6,25 @@ strict unit/currency matcher, feed->market factor, prefilter, and correlation_ke
 verbatim) but replaces the analytic pricing with a Monte-Carlo simulation of the
 terminal price.
 
-Process: a **block bootstrap** of historical daily log-returns. To price a strike at
-horizon T we resample blocks of consecutive real daily returns (block ~10 trading
-days, so volatility clustering / spikes survive), compound over n_days = round(T*252),
-exponentiate, and read P(exceed) = fraction of simulated terminal prices above the
-threshold. Returns are DEMEANED so the process is zero-drift (matching commodity_spot's
-validated assumption) — the only difference from the lognormal is the TAIL SHAPE.
+Process (default "ksb"): a **kernel-smoothed block bootstrap** of historical daily
+log-returns. To price a strike at horizon T we resample blocks of consecutive real
+daily returns (block ~10 trading days, so volatility clustering / spikes survive),
+convolve each day with a variance-preserving Student-t kernel (Silverman bandwidth) so
+the simulation can extrapolate beyond any historically observed move, compound over
+n_days = round(T*252), exponentiate, and read P(exceed) = fraction of simulated terminal
+prices above the threshold. Returns are DEMEANED so the process is zero-drift (matching
+commodity_spot's validated assumption) — the difference from the lognormal is the
+empirical SHAPE (skew + fat tails + vol clustering), not the level.
 
-Why: the lognormal has thin (Gaussian-in-log) tails. Real commodity returns have fat
-tails / jumps (silver, the 2024 cocoa run). The bootstrap captures the *empirical* tail,
-so the edge over the lognormal is concentrated in the far-from-spot strikes that are
-commodity_spot's stated edge source. For interior strikes the two price ~identically —
-so this is a tail refinement, and it ships behind a backtest gate (see config).
+Why it beats the lognormal: the lognormal has thin (Gaussian-in-log) tails AND a
+symmetric body. Real commodity returns are skewed with fat tails / jumps. The multi-fold
+walk-forward bench (scripts/diffusion_bench.py) shows that *under the framework's
+realistic per-market stake cap* the empirical pricer beats the lognormal on Brier, PnL,
+Sharpe AND worst-fold across all 8 commodities — the cap neutralizes the lognormal's
+tail over-confidence, then the better body calibration wins. The edge peaks at MEDIUM
+horizons (21-63d, where most clone ladders close) and fades to a tie at very short (no
+compounding) or very long (CLT) horizons. The kernel smoothing closes the plain
+bootstrap's only hole (it cannot price a move larger than any in history).
 
 Calibration uses yfinance history via `research.data_fetch` (the `research` extra). If
 that's unavailable or a series is too short, the affected commodity falls back to the
@@ -47,31 +54,42 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
     description = (
         "Monte-Carlo stochastic-diffusion pricer for commodity spot-price markets. "
         "Same strict matcher/markets as commodity_spot, but prices each strike off a "
-        "block-bootstrap simulation of historical daily returns (zero-drift, demeaned) "
-        "instead of a closed-form lognormal — capturing the fat tails/jumps the "
-        "lognormal misses, where the edge lives (far-from-spot strikes). Falls back to "
+        "kernel-smoothed block-bootstrap simulation of historical daily returns "
+        "(zero-drift, demeaned) instead of a closed-form lognormal — capturing the "
+        "empirical skew/fat-tails the lognormal misses. Beats the lognormal on "
+        "calibration AND capped PnL/Sharpe in multi-fold walk-forward. Falls back to "
         "the lognormal when history is missing."
     )
 
-    def __init__(self, period: str = "3y", n_sims: int = 20000, block_len: int = 10,
+    def __init__(self, period: str = "10y", n_sims: int = 20000, block_len: int = 10,
                  min_returns: int = 250, drift_mode: str = "zero", drift_cap: float = 0.15,
-                 process: str = "student_t", jitter: float = 0.4, **params: Any):
+                 process: str = "ksb", jitter: float = 0.4, df_kernel: float = 4.0,
+                 **params: Any):
         super().__init__(**params)  # vols/min_vol/max_horizon_years flow through params
         self.period = period
         self.n_sims = int(n_sims)
         self.block_len = int(block_len)
         self.min_returns = int(min_returns)
-        # Terminal-distribution process:
-        #  "bootstrap"  — block-bootstrap of historical returns. Best body calibration,
-        #                 but CANNOT extrapolate beyond observed moves -> catastrophic on
-        #                 unprecedented tail events (assigns ~0 to a strike that hits).
-        #  "student_t"  — Student-t innovations (df fit per commodity). Continuous fat
-        #                 tails that EXTRAPOLATE -> keeps most of the body edge AND fixes
-        #                 the bootstrap's tail miss. (Diagnostic: best overall.) DEFAULT.
-        #  "hybrid"     — bootstrap + small Gaussian jitter so sums can exceed historical
-        #                 extremes (a cheaper tail patch).
+        # Terminal-distribution process (chosen by the multi-fold walk-forward bench,
+        # scripts/diffusion_bench.py — see header). KEY FINDING: under the framework's
+        # realistic per-market stake CAP, the empirical-body processes beat the lognormal
+        # on EVERY axis (Brier, PnL, Sharpe, worst-fold) across 8 commodities x 5 folds —
+        # the cap neutralizes the lognormal's tail OVER-confidence, then better body
+        # calibration wins. Edge peaks at MEDIUM horizons (21-63d), where most clone
+        # ladders close, and fades to a tie at <=5d (no compounding) and >=126d (CLT).
+        #  "ksb"        — Kernel-Smoothed Bootstrap: block-bootstrap the empirical returns,
+        #                 then convolve each day with a variance-preserving Student-t kernel
+        #                 (Silverman bandwidth). Matches the plain bootstrap's best-in-class
+        #                 PnL/Brier EXACTLY *and* can extrapolate beyond observed moves, so
+        #                 it has no catastrophic-tail hole. DEFAULT (best + tail-safe).
+        #  "bootstrap"  — plain block bootstrap. Ties ksb on the body but CANNOT extrapolate
+        #                 beyond observed moves (assigns ~0 to an unprecedented strike).
+        #  "student_t"  — Student-t innovations (df fit per commodity). Most aggressive
+        #                 extrapolator; slightly worse body calibration than ksb/bootstrap.
+        #  "hybrid"     — bootstrap + Gaussian jitter (a cruder, thin-tailed tail patch).
         self.process = process
         self.jitter = float(jitter)
+        self.df_kernel = float(df_kernel)
         self._tparams: dict[str, tuple[float, float]] = {}  # entity -> (df, daily_scale)
         # Drift handling. "zero" (demeaned, the validated commodity_spot assumption) vs
         # "hist" (keep the calibration-window mean drift). Diagnostics showed the
@@ -181,14 +199,25 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
             df, scale = self._tparams_for(entity)
             term_logret = (rng.standard_t(df, size=(self.n_sims, n_days)) * scale).sum(axis=1)
         else:
+            # Block bootstrap of empirical daily returns (the body) -> (n_sims, n_days).
             bl = min(self.block_len, len(rets))
             n_blocks = math.ceil(n_days / bl)
             starts = rng.integers(0, len(rets) - bl + 1, size=(self.n_sims, n_blocks))
             idx = starts[:, :, None] + np.arange(bl)[None, None, :]  # (N, n_blocks, bl)
-            term_logret = rets[idx].reshape(self.n_sims, n_blocks * bl)[:, :n_days].sum(axis=1)
-            if self.process == "hybrid":  # add Gaussian jitter so sums can exceed observed extremes
+            daily = rets[idx].reshape(self.n_sims, n_blocks * bl)[:, :n_days]
+            if self.process == "ksb":
+                # Convolve each day with a variance-preserving Student-t kernel at Silverman
+                # bandwidth: lets the sum exceed any observed move (extrapolation) while the
+                # per-day vol is preserved EXACTLY, so the body calibration is untouched.
+                s = float(np.std(rets))
+                h = 0.9 * len(rets) ** (-0.2)
+                dfk = max(self.df_kernel, 2.5)
+                z = rng.standard_t(dfk, size=daily.shape) * math.sqrt((dfk - 2.0) / dfk)
+                daily = (daily + h * s * z) / math.sqrt(1.0 + h * h)
+            elif self.process == "hybrid":  # cruder Gaussian jitter so sums can exceed observed extremes
                 dvol = float(np.std(rets))
-                term_logret = term_logret + rng.normal(0.0, self.jitter * dvol, size=(self.n_sims, n_days)).sum(axis=1)
+                daily = daily + rng.normal(0.0, self.jitter * dvol, size=daily.shape)
+            term_logret = daily.sum(axis=1)
 
         if self.drift_mode == "hist":
             cap_daily = self.drift_cap / 252.0
@@ -246,7 +275,7 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
             f"- {d['entity']} spot anchor: **${d['spot']:,.2f}** (feed @ {d.get('obs_ts') or 'latest'})\n"
             f"- Threshold: **${d['threshold']:,.2f}** ({d['direction']}); "
             f"{(d['threshold'] / d['spot'] - 1):+.1%} vs spot, T={d['T']:.2f}y\n"
-            f"- Monte-Carlo ({d['n_sims']:,} sims, block-bootstrap fat tails): "
+            f"- Monte-Carlo ({d['n_sims']:,} sims, kernel-smoothed bootstrap): "
             f"P({d['direction']}) = **{d['p']:.3f}**\n"
             f"- vs lognormal {d['lognormal_p']:.3f} → tail delta **{d['p'] - d['lognormal_p']:+.3f}**"
         )

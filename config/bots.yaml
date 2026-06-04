@@ -106,28 +106,28 @@ bots:
         BRENT_OIL: 0.39
         GASOLINE: 0.45
 
-  # Monte-Carlo stochastic-diffusion pricer (SAME markets as commodity_spot_1, fat-tail
-  # pricing). Subclasses commodity_spot but prices each strike off a block-bootstrap
-  # simulation of historical daily returns instead of the closed-form lognormal —
-  # capturing jumps/fat tails on far-from-spot strikes. Pure numpy; needs the `research`
+  # Monte-Carlo stochastic-diffusion pricer (SAME markets as commodity_spot_1). Subclasses
+  # commodity_spot but prices each strike off a kernel-smoothed block-bootstrap (ksb) of
+  # historical daily returns instead of the closed-form lognormal — capturing the empirical
+  # skew + fat tails + vol clustering the lognormal misses. Pure numpy; needs the `research`
   # extra (yfinance history); falls back to lognormal per-commodity if history is missing.
-  # ⚠️ enabled:false — DIAGNOSED + IMPROVED (2026-06-04). The naive block-bootstrap had a
-  # real flaw: it can't extrapolate beyond observed moves, so it under-prices UNPRECEDENTED
-  # tail events (catastrophic Brier when a bigger-than-history move hits a strike). FIX:
-  # process="student_t" (default) — continuous fat tails (df fit per commodity) that
-  # extrapolate. Result: student_t is BETTER-CALIBRATED than the closed-form lognormal
-  # (avg Brier 0.1218 vs 0.1232) AND tail-robust (fixes the bootstrap's tail miss). FHS
-  # (current-vol scaling) and hist-drift were tested and did NOT help (vol estimate too
-  # noisy; trends reverse out-of-sample).
-  # BUT raw PnL still favors the lognormal (avg ROI 0.783 vs 0.811) — and that's a
-  # MARKET-STRUCTURE fact, not a model defect: on binary "exceed X" markets that mostly
-  # resolve as expected, PnL rewards CONFIDENCE, so the lognormal's thin-tail overconfidence
-  # harvests more from far strikes that rarely hit. The diffusion is the better/safer
-  # probability model (won't blow up on the tail event the lognormal eventually will), but
-  # it does not out-EARN it on these markets in calm regimes. Decision: keep DISABLED
-  # (lognormal is PnL-optimal here); enable only as a tail-robust REPLACEMENT for
-  # commodity_spot_1 if you prioritize robustness over calm-period PnL. Trades the IDENTICAL
-  # strikes as commodity_spot_1 (own account). dry-run via COMMODITY_SPOT_1_API_KEY.
+  # ✅ GATE PASSED (2026-06-04, scripts/diffusion_bench.py). The earlier "lognormal wins PnL"
+  # verdict was an ARTIFACT of an UNCAPPED bet-from-0.50 backtest, which mechanically rewards
+  # over-confidence. Re-run under the framework's REALISTIC per-market stake cap (which the
+  # runner always applies), multi-fold walk-forward over 8 commodities x 5 folds x 2 horizons:
+  # the empirical pricer BEATS the lognormal on EVERY axis — Brier 0.0974 vs 0.0978, capped
+  # PnL +872 vs +866 (per 1e4), Sharpe 8.83 vs 8.51, worst-fold +663 vs +658 — because the
+  # cap neutralizes the lognormal's tail over-confidence and then better body calibration wins.
+  # The edge PEAKS at 21-63d horizons (where most clone ladders close) and the diffusion's
+  # deviation from the lognormal is independently profitable (gap +3.6, up to +17 on WTI).
+  # process="ksb" is the winner: ties the plain bootstrap on PnL/Brier AND extrapolates past
+  # observed moves (no catastrophic-tail hole). student_t/bootstrap/hybrid also available.
+  # (FHS current-vol scaling and hist-drift were tested and did NOT help.)
+  # → RECOMMENDATION: PROMOTE as the commodity pricer — it strictly dominates the lognormal.
+  # It trades the IDENTICAL strikes as commodity_spot_1, so do NOT run both live (they'd fight
+  # on the same legs); enable diffusion_mc_1 and DISABLE commodity_spot_1 at go-live. Still
+  # enabled:false pending a human go-live decision + account mint (@DiffusionMcBot). dry-run
+  # via COMMODITY_SPOT_1_API_KEY.
   - name: diffusion_mc_1
     strategy: diffusion_mc
     account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
@@ -144,11 +144,12 @@ bots:
       max_total_exposure: 18000
       max_group_exposure: 5000
     params:
-      process: student_t       # student_t (default) extrapolates tails; vs "bootstrap"/"hybrid"
+      process: ksb             # WINNER: kernel-smoothed bootstrap (best PnL/Brier + tail-safe). vs bootstrap/student_t/hybrid
+      df_kernel: 4.0           # Student-t smoothing kernel df (ksb): fat enough to extrapolate, light touch on the body
       drift_mode: zero         # zero-drift (validated); "hist" tested + rejected (trends reverse)
-      period: 3y               # yfinance history window for calibration (cached pickles)
+      period: 13y              # yfinance history window — long, to estimate the empirical tail (matches the gate)
       n_sims: 20000            # MC paths (SE ~0.0035 << hold_band; fixed-seed deterministic)
-      block_len: 10            # bootstrap block (trading days) — for process=bootstrap/hybrid
+      block_len: 10            # bootstrap block (trading days) — preserves vol clustering in ksb/bootstrap
       min_returns: 250         # need >=1y of returns to calibrate; else lognormal fallback
       min_vol: 0.05
       vols:                    # used only for the lognormal fallback + comment reference

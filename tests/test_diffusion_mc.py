@@ -151,6 +151,25 @@ def test_student_t_extrapolates_beyond_bootstrap():
     assert np.mean(t_t > strike) > 0.0       # student-t extrapolates into the unobserved tail
 
 
+# 7c. THE DEPLOYED MODEL: the kernel-smoothed bootstrap (ksb, the default) keeps the
+#     plain bootstrap's empirical body but, via the variance-preserving Student-t kernel,
+#     ALSO extrapolates past the observed range — so it has neither the bootstrap's
+#     catastrophic-tail hole nor a parametric body. (The multi-fold bench shows it ties
+#     the bootstrap on PnL/Brier and beats the lognormal on both, while staying tail-safe.)
+def test_ksb_is_default_and_extrapolates():
+    assert DiffusionMcStrategy().process == "ksb"   # deployed default
+    rng = np.random.default_rng(1)
+    bounded = rng.uniform(-0.02, 0.02, 4000)
+    bounded = bounded - bounded.mean()
+    spot, T = 2000.0, 1.0 / 252.0
+    strike = spot * np.exp(0.03)  # beyond the ~0.02 historical max single move
+
+    ksb = DiffusionMcStrategy(process="ksb", n_sims=80000)
+    ksb.set_returns("GOLD", bounded)
+    t_ksb = ksb._simulate_terminal("GOLD", spot, T)
+    assert np.mean(t_ksb > strike) > 0.0          # extrapolates beyond the observed range
+
+
 # 8. Fixed seed -> identical estimates across calls (no order churn).
 def test_seed_stability():
     rets = _fat_returns()
