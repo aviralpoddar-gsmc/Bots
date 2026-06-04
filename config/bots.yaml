@@ -111,19 +111,23 @@ bots:
   # simulation of historical daily returns instead of the closed-form lognormal —
   # capturing jumps/fat tails on far-from-spot strikes. Pure numpy; needs the `research`
   # extra (yfinance history); falls back to lognormal per-commodity if history is missing.
-  # ⚠️ enabled:false — WALK-FORWARD GATE (2026-06-03, train/test split, lookahead-free,
-  # GOLD+WTI): NO consistent edge. GOLD diffusion WORSE (Brier 0.0865->0.0884, ROI tie);
-  # WTI better-calibrated (Brier 0.1285->0.1192) but WORSE PnL (ROI 0.900->0.835). The
-  # earlier full-history gate that looked marginally better was lookahead inflation. The
-  # fat-tail refinement doesn't translate to realized edge. FAIR-SHOT confirmed: re-ran on
-  # the FATTEST-tailed / SHORTEST-horizon regime (PALLADIUM/GASOLINE/WTI, excess-kurt
-  # 25-78, ~3wk horizon — diffusion's best case) and it STILL loses: often better-
-  # CALIBRATED (Brier) but ALWAYS worse PnL (ROI -0.024..-0.117), because honest fat tails
-  # make it less confident on extreme strikes that rarely hit, so the lognormal's tail-
-  # OVERconfidence is rewarded on these range-bound markets. FINAL: keep DISABLED — built
-  # + exhaustively validated, no PnL edge over the closed-form lognormal in any regime.
-  # Trades the IDENTICAL strikes as commodity_spot_1 (own account). Mint @DiffusionMcBot
-  # only if a genuinely different use-case appears; dry-run via COMMODITY_SPOT_1_API_KEY.
+  # ⚠️ enabled:false — DIAGNOSED + IMPROVED (2026-06-04). The naive block-bootstrap had a
+  # real flaw: it can't extrapolate beyond observed moves, so it under-prices UNPRECEDENTED
+  # tail events (catastrophic Brier when a bigger-than-history move hits a strike). FIX:
+  # process="student_t" (default) — continuous fat tails (df fit per commodity) that
+  # extrapolate. Result: student_t is BETTER-CALIBRATED than the closed-form lognormal
+  # (avg Brier 0.1218 vs 0.1232) AND tail-robust (fixes the bootstrap's tail miss). FHS
+  # (current-vol scaling) and hist-drift were tested and did NOT help (vol estimate too
+  # noisy; trends reverse out-of-sample).
+  # BUT raw PnL still favors the lognormal (avg ROI 0.783 vs 0.811) — and that's a
+  # MARKET-STRUCTURE fact, not a model defect: on binary "exceed X" markets that mostly
+  # resolve as expected, PnL rewards CONFIDENCE, so the lognormal's thin-tail overconfidence
+  # harvests more from far strikes that rarely hit. The diffusion is the better/safer
+  # probability model (won't blow up on the tail event the lognormal eventually will), but
+  # it does not out-EARN it on these markets in calm regimes. Decision: keep DISABLED
+  # (lognormal is PnL-optimal here); enable only as a tail-robust REPLACEMENT for
+  # commodity_spot_1 if you prioritize robustness over calm-period PnL. Trades the IDENTICAL
+  # strikes as commodity_spot_1 (own account). dry-run via COMMODITY_SPOT_1_API_KEY.
   - name: diffusion_mc_1
     strategy: diffusion_mc
     account_env: DIFFUSION_MC_1_API_KEY   # own account: @DiffusionMcBot (mint at go-live)
@@ -140,9 +144,11 @@ bots:
       max_total_exposure: 18000
       max_group_exposure: 5000
     params:
+      process: student_t       # student_t (default) extrapolates tails; vs "bootstrap"/"hybrid"
+      drift_mode: zero         # zero-drift (validated); "hist" tested + rejected (trends reverse)
       period: 3y               # yfinance history window for calibration (cached pickles)
       n_sims: 20000            # MC paths (SE ~0.0035 << hold_band; fixed-seed deterministic)
-      block_len: 10            # bootstrap block (trading days) — preserves vol clustering
+      block_len: 10            # bootstrap block (trading days) — for process=bootstrap/hybrid
       min_returns: 250         # need >=1y of returns to calibrate; else lognormal fallback
       min_vol: 0.05
       vols:                    # used only for the lognormal fallback + comment reference

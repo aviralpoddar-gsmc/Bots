@@ -54,14 +54,36 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
     )
 
     def __init__(self, period: str = "3y", n_sims: int = 20000, block_len: int = 10,
-                 min_returns: int = 250, **params: Any):
+                 min_returns: int = 250, drift_mode: str = "zero", drift_cap: float = 0.15,
+                 process: str = "student_t", jitter: float = 0.4, **params: Any):
         super().__init__(**params)  # vols/min_vol/max_horizon_years flow through params
         self.period = period
         self.n_sims = int(n_sims)
         self.block_len = int(block_len)
         self.min_returns = int(min_returns)
-        # {entity: np.ndarray of demeaned daily log-returns}. Empty until calibrated.
+        # Terminal-distribution process:
+        #  "bootstrap"  — block-bootstrap of historical returns. Best body calibration,
+        #                 but CANNOT extrapolate beyond observed moves -> catastrophic on
+        #                 unprecedented tail events (assigns ~0 to a strike that hits).
+        #  "student_t"  — Student-t innovations (df fit per commodity). Continuous fat
+        #                 tails that EXTRAPOLATE -> keeps most of the body edge AND fixes
+        #                 the bootstrap's tail miss. (Diagnostic: best overall.) DEFAULT.
+        #  "hybrid"     — bootstrap + small Gaussian jitter so sums can exceed historical
+        #                 extremes (a cheaper tail patch).
+        self.process = process
+        self.jitter = float(jitter)
+        self._tparams: dict[str, tuple[float, float]] = {}  # entity -> (df, daily_scale)
+        # Drift handling. "zero" (demeaned, the validated commodity_spot assumption) vs
+        # "hist" (keep the calibration-window mean drift). Diagnostics showed the
+        # bootstrap is BETTER-calibrated than the lognormal but loses raw PnL because
+        # both are zero-drift on directional "exceed X" markets — drift is the lever
+        # that targets PnL. drift_cap bounds the annualized drift so a strong trailing
+        # trend can't run the fair value away.
+        self.drift_mode = drift_mode
+        self.drift_cap = float(drift_cap)
+        # {entity: demeaned daily log-returns}; {entity: mean daily log-return}.
         self._returns: dict[str, Any] = {}
+        self._drift: dict[str, float] = {}
 
     # --- calibration ---------------------------------------------------------
 
@@ -70,9 +92,11 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
         if not self._returns:       # calibrate ONCE — backtest.py calls bind() every step
             self._calibrate()
 
-    def set_returns(self, entity: str, returns: Any) -> None:
-        """Test seam: inject a demeaned daily-log-return array without network."""
+    def set_returns(self, entity: str, returns: Any, drift: float = 0.0) -> None:
+        """Test/eval seam: inject a demeaned daily-log-return array (+ optional mean
+        daily drift) without network."""
         self._returns[entity] = returns
+        self._drift[entity] = float(drift)
 
     def _calibrate(self) -> None:
         try:
@@ -102,6 +126,7 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
             if len(logret) < self.min_returns:
                 continue
             self._returns[entity] = logret - logret.mean()  # demean -> zero drift
+            self._drift[entity] = float(logret.mean())       # raw mean (used by drift_mode="hist")
             implied_vol = float(logret.std() * math.sqrt(252))
             logger.info("diffusion_mc: calibrated %s (%d returns, implied vol %.2f/yr)",
                         entity, len(logret), implied_vol)
@@ -121,24 +146,54 @@ class DiffusionMcStrategy(CommoditySpotStrategy):
             groups.setdefault(key, []).append(m)
         return list(groups.values())
 
+    def _tparams_for(self, entity: str):
+        """(df, daily_scale) of a Student-t fit to the entity's demeaned returns, cached.
+        scale is set so the t's std equals the realized daily vol."""
+        if entity in self._tparams:
+            return self._tparams[entity]
+        import numpy as np
+        rets = self._returns[entity]
+        dvol = float(np.std(rets))
+        df = 5.0
+        try:
+            from scipy import stats
+            df = float(stats.t.fit(rets)[0])
+        except Exception:  # noqa: BLE001 - scipy missing/odd fit -> sane default df
+            pass
+        df = min(max(df, 3.0), 15.0)  # df>2 for finite var; clamp noise
+        scale = dvol / math.sqrt(df / (df - 2.0))
+        self._tparams[entity] = (df, scale)
+        return df, scale
+
     def _simulate_terminal(self, entity: str, spot: float, T: float):
-        """N simulated terminal prices via block bootstrap, or None if uncalibrated."""
+        """N simulated terminal prices, or None if uncalibrated."""
         import numpy as np
 
         rets = self._returns.get(entity)
         if rets is None or len(rets) < self.min_returns:
             return None
         n_days = max(1, round(T * 252))
-        bl = min(self.block_len, len(rets))
-        n_blocks = math.ceil(n_days / bl)
-        max_start = len(rets) - bl
-        # Deterministic seed per (entity, horizon) — stable across runs (no order churn).
-        seed = zlib.crc32(f"{entity}:{n_days}".encode()) & 0xFFFFFFFF
+        # Deterministic seed per (entity, horizon, process) — stable across runs.
+        seed = zlib.crc32(f"{entity}:{n_days}:{self.process}".encode()) & 0xFFFFFFFF
         rng = np.random.default_rng(seed)
-        starts = rng.integers(0, max_start + 1, size=(self.n_sims, n_blocks))
-        idx = starts[:, :, None] + np.arange(bl)[None, None, :]  # (N, n_blocks, bl)
-        paths = rets[idx].reshape(self.n_sims, n_blocks * bl)[:, :n_days]
-        term_logret = paths.sum(axis=1)
+
+        if self.process == "student_t":
+            df, scale = self._tparams_for(entity)
+            term_logret = (rng.standard_t(df, size=(self.n_sims, n_days)) * scale).sum(axis=1)
+        else:
+            bl = min(self.block_len, len(rets))
+            n_blocks = math.ceil(n_days / bl)
+            starts = rng.integers(0, len(rets) - bl + 1, size=(self.n_sims, n_blocks))
+            idx = starts[:, :, None] + np.arange(bl)[None, None, :]  # (N, n_blocks, bl)
+            term_logret = rets[idx].reshape(self.n_sims, n_blocks * bl)[:, :n_days].sum(axis=1)
+            if self.process == "hybrid":  # add Gaussian jitter so sums can exceed observed extremes
+                dvol = float(np.std(rets))
+                term_logret = term_logret + rng.normal(0.0, self.jitter * dvol, size=(self.n_sims, n_days)).sum(axis=1)
+
+        if self.drift_mode == "hist":
+            cap_daily = self.drift_cap / 252.0
+            d = max(min(self._drift.get(entity, 0.0), cap_daily), -cap_daily)
+            term_logret = term_logret + d * n_days
         return spot * np.exp(term_logret)
 
     def estimate(self, group: list[Market]) -> dict[str, float]:

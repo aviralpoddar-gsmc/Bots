@@ -126,6 +126,31 @@ def test_fallback_to_lognormal_when_uncalibrated():
     assert p is not None and 0.01 <= p <= 0.99
 
 
+# 7b. THE FIX: student-t extrapolates beyond the historical return range; the bootstrap
+#     cannot (it only resamples observed moves), so it under-prices unprecedented tails.
+def test_student_t_extrapolates_beyond_bootstrap():
+    # Bounded history (|move| <= 0.02). Over a 1-day horizon the bootstrap terminal can
+    # never exceed the largest observed move, so it puts ZERO mass beyond it; student-t
+    # has continuous support and extrapolates. (This is the bootstrap flaw the fix addresses
+    # — it shows in the raw distribution; the 0.01 clamp would hide it on a point estimate.)
+    rng = np.random.default_rng(1)
+    bounded = rng.uniform(-0.02, 0.02, 4000)
+    bounded = bounded - bounded.mean()
+    spot, T = 2000.0, 1.0 / 252.0
+    strike = spot * np.exp(0.03)  # beyond the ~0.02 historical max single move
+
+    boot = DiffusionMcStrategy(process="bootstrap", n_sims=40000)
+    boot.set_returns("GOLD", bounded)
+    t_boot = boot._simulate_terminal("GOLD", spot, T)
+
+    tdist = DiffusionMcStrategy(process="student_t", n_sims=40000)
+    tdist.set_returns("GOLD", bounded)
+    t_t = tdist._simulate_terminal("GOLD", spot, T)
+
+    assert np.mean(t_boot > strike) == 0.0   # bootstrap cannot reach beyond observed moves
+    assert np.mean(t_t > strike) > 0.0       # student-t extrapolates into the unobserved tail
+
+
 # 8. Fixed seed -> identical estimates across calls (no order churn).
 def test_seed_stability():
     rets = _fat_returns()
