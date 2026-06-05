@@ -368,10 +368,12 @@ def test_build_maker_strategy_explicit_wrapper():
 
 
 def test_config_market_maker_1_is_maker_mode():
-    # the shipped market_maker_1 is maker-mode over commodity_spot (no wrapper).
+    # the shipped market_maker_1 is maker-mode over diffusion_mc (no wrapper).
+    # Re-anchored 2026-06-05 from commodity_spot (retired) to diffusion_mc (the live
+    # pricer that superseded it) — same markets/matcher, better fair values.
     from quantbots.config import load_bot
     cfg = load_bot("market_maker_1")
-    assert cfg.maker is True and cfg.strategy == "commodity_spot"
+    assert cfg.maker is True and cfg.strategy == "diffusion_mc"
     assert cfg.limits.get("half_spread") and cfg.limits.get("max_markets")
 
 

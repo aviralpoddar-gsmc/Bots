@@ -394,16 +394,21 @@ bots:
   # === Market-maker (maker MODE — Phase 4) ===
   # `maker: true` switches EXECUTION only: instead of taker market orders, the
   # runner posts two-sided RESTING limit quotes around this bot's own fair value
-  # (here commodity_spot's), with fill reconciliation. Any calibrated anchor becomes
+  # (here diffusion_mc's), with fill reconciliation. Any calibrated anchor becomes
   # a liquidity provider on its own account by adding `maker: true` — no wrapper
   # strategy, no separate bot. `quantbots run --bot market_maker_1` auto-routes to
   # the maker path. Maker knobs live in `limits`. See docs/market-maker.md.
-  # NOTE: enabled:false + NOT in daily_cycle.sh until a human confirms go-live.
-  # Live-canary verified 2026-06-01 (@MarketMakerBot). Overlaps commodity_spot_1 on
-  # the same legs — disable commodity_spot on dislocated legs before full deploy, or
-  # flip commodity_spot_1 itself to maker:true and retire this bot.
+  # ANCHOR UPDATED 2026-06-05: was commodity_spot (now retired); re-anchored on
+  # diffusion_mc (the live, better-calibrated pricer that replaced it). Same markets
+  # + matcher (diffusion_mc subclasses commodity_spot), strictly better fair values.
+  # ⚠️ ECONOMIC REALITY (verified 2026-06-01, still holds): the clone has NO organic
+  # two-sided flow → spread capture ≈ 0 (all fills cross the AMM like a taker), and the
+  # better-execution edge is only ~1.2%. So this stays SHELVED: enabled:false, NOT in
+  # daily_cycle.sh. It ALSO overlaps diffusion_mc_1 on the identical metals legs, so
+  # going live would double-stack exposure. Revisit only if the clone gets real trader
+  # flow. The code is kept current + validated so it's ready if that ever changes.
   - name: market_maker_1
-    strategy: commodity_spot      # the fair-value source (the anchor itself)
+    strategy: diffusion_mc        # the fair-value source (the anchor itself) — the live pricer
     account_env: MARKET_MAKER_1_API_KEY   # own account: @MarketMakerBot
     enabled: false
     maker: true                   # execute as a maker (limit-capped resting quotes)
@@ -423,9 +428,16 @@ bots:
       inventory_cap: 200       # |net YES shares| per market before one-sided quoting
       quote_ttl_hours: 25      # TTL backstop (slightly over daily cadence)
       max_markets: 10          # breadth cap: quote the 10 most liquid priced markets
-    params:                    # forwarded to the commodity_spot source — use the
-      min_vol: 0.05            # SAME calibrated vols as commodity_spot_1 so the
-      vols:                    # maker prices off the tuned model, not catalog defaults
+    params:                    # forwarded to the diffusion_mc source so the maker
+      process: ksb             # prices off the SAME tuned model as diffusion_mc_1
+      df_kernel: 4.0           # (kernel-smoothed bootstrap; see diffusion_mc_1 block)
+      drift_mode: zero
+      period: 13y              # long window for the empirical tail (matches the gate)
+      n_sims: 20000
+      block_len: 10
+      min_returns: 250
+      min_vol: 0.05            # lognormal-fallback floor + comment reference vol
+      vols:                    # used by the per-commodity lognormal fallback only
         GOLD: 0.16
         SILVER: 0.30
         PLATINUM: 0.22
