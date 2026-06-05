@@ -27,6 +27,13 @@ BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
       "cocoa_fundamental_1" "coffee_consumption_1" "fas_balance_1" "wasde_cotton_1" \
       "surface_arb_1" "ensemble_1" "commodity_1" "enso_1" "mean_reverter" "llm_forecaster")
 
+# Retired bots that still hold OPEN positions: RESOLVE-ONLY (never traded), so their legacy
+# book keeps realizing PnL / syncing resolutions after being pulled from BOTS. Removing a bot
+# from BOTS alone would STRAND its open positions (resolve is per-bot). commodity_spot_1 was
+# retired 2026-06-04 (superseded by diffusion_mc_1) but still holds ~Ṁ12k; keep resolving it
+# until that book fully closes, then drop it from this list.
+RESOLVE_ALSO=("commodity_spot_1")
+
 cd "$REPO" || exit 1
 # shellcheck disable=SC1090
 source "$VENV"
@@ -46,7 +53,8 @@ run quantbots ingest || log "ingest failed (continuing with stale feeds)"
 run quantbots process || log "process failed (continuing without fresh signals)"
 
 # 2. Realize PnL on positions whose markets resolved (per bot). Reads from cache.
-for bot in "${BOTS[@]}"; do
+#    Includes RESOLVE_ALSO so retired bots' open books keep settling after leaving BOTS.
+for bot in "${BOTS[@]}" "${RESOLVE_ALSO[@]}"; do
   run quantbots resolve --bot "$bot" || log "resolve $bot failed (continuing)"
 done
 
