@@ -358,15 +358,22 @@ bots:
       conf_cap: 0.75      # never bet >75% conviction (obscure markets -> hallucination risk)
       max_groups: 12      # cap LLM calls per run (~50s each on 32b)
 
-  # === COSMETIC DEMO COVERAGE (local LLM) — the cocoa/coffee "50% sea" ===
-  # These quantity/demand markets have NO fundamental data source (cocoa isn't in
-  # FAS PSD; coffee has no price markets) and ~never resolve, so no anchored bot can
-  # price them. This bot uses the LOCAL LLM to reason a fair value per measurable
-  # ladder purely so the markets move off 0.50 for the demo. It is NOT an alpha bot:
-  # targets cancel-prone markets (capital-neutral, ~zero expected PnL); kept tiny.
-  # Scoped to cocoa/coffee and EXCLUDES price markets (other bots own those).
-  # enabled:false; the full run is slow (~50s/ladder on 32b) — run on demand to
-  # populate the demo. Mint @LlmAgCoverageBot at go-live; dry-run via an existing key.
+  # === COSMETIC DEMO COVERAGE (local LLM) — the AG quantity "50% sea" ===
+  # These quantity/demand/production/stocks markets have NO fundamental data source
+  # and ~never resolve, so no anchored bot prices them. This bot uses the LOCAL LLM
+  # to reason a fair value per measurable ladder purely so the markets move off 0.50
+  # and form coherent (monotone) ladders for the demo. It is NOT an alpha bot:
+  # targets cancel-prone markets (capital-neutral, ~zero expected PnL); kept small.
+  # SCOPE EXPANDED 2026-06-08 to the broad ag quantity sea (was cocoa/coffee only):
+  # cocoa, coffee, \bcorn\b (word-boundary so it skips "Corning"/"Four Corners"/
+  # "Cornerstone"), beef — the categories with the most uncovered ladders and NO
+  # dedicated bot. Census: ~876 ag ladder markets / 181 measurables; corn is the
+  # largest (267 mkts, 34 stuck at 0.50). EXCLUDES price markets (other bots own
+  # those) via unit guards (/lb, USc, /bushel, cents/lb, USD/t, /mt, ...). Dropped
+  # "oat" (no real oats markets — matched boat/coat/float). max_groups raised to cover
+  # every ladder in one pass; budget/exposure raised to fund broad coverage (actual
+  # spend stays small — orders size to thin ag liquidity).
+  # enabled:false; on-demand (slow: ~11s/ladder on gemma4 → ~30-40min full sweep).
   - name: llm_ag_coverage
     strategy: llm
     account_env: LLM_AG_COVERAGE_API_KEY
@@ -377,16 +384,16 @@ bots:
       hold_band: 0.05
       min_ev: 0.0               # cosmetic coverage: do not gate on EV
       min_resolvability: 0.0    # deliberately trade the non-resolving sea (capital-neutral)
-      max_run_budget: 3000
-      max_total_exposure: 6000
+      max_run_budget: 8000      # raised for the broad ag sweep (per-run reserve)
+      max_total_exposure: 20000 # cumulative cap; actual fill stays well under (small orders)
       dry_run_sample: 25
     params:
       model: gemma4:latest      # small/fast (8B, ~11s/ladder) — quality irrelevant for cosmetic
       spread_mult: 1.5          # wider bands: these are obscure quantities -> stay humble
       conf_cap: 0.70
-      max_groups: 60            # cover the cocoa/coffee ladders in one run
-      include_terms: ["cocoa", "coffee"]
-      exclude_terms: ["price", "futures", "basis", "spread", "cents/lb", "USD/t", "/mt", "nearest-futures"]
+      max_groups: 220           # cover EVERY ag ladder in one pass (~181 measurables + headroom)
+      include_terms: ["cocoa", "coffee", "\\bcorn\\b", "beef"]
+      exclude_terms: ["price", "futures", "basis", "spread", "cents/lb", "USc", "/lb", "/bushel", "bushel", "USD/t", "/mt", "nearest-futures"]
       no_think: false           # gemma has no thinking mode (qwen3-only knob)
       num_ctx: 6144             # small context: these prompts are short; 32K just slows prefill
       timeout: 75               # cap per-ladder time; a slow ladder abstains (stays 0.50) fast
