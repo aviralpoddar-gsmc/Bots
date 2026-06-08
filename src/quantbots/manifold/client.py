@@ -248,11 +248,17 @@ class ManifoldClient:
         """Subsidize a market's CPMM pool with `amount` mana (integer), deepening
         it so trades move price less per mana. Returns the LiquidityProvision.
         The subsidy is returned to the provider at resolution (refunded on CANCEL).
+
+        NOTE: unlike /bet, the clone's add-liquidity endpoint has NO server-side
+        dry-run — it rejects an unrecognized `dryRun` key with HTTP 400. So
+        dry_run=True is a purely LOCAL no-op preview (no network call): it returns a
+        synthetic record and never touches the pool. Callers that want to validate
+        against the server must do a real (small) add.
         """
-        data: dict[str, Any] = {"amount": int(amount)}
         if dry_run:
-            data["dryRun"] = True
-        return self._request("POST", f"market/{market_id}/add-liquidity", data=data)
+            return {"dryRun": True, "contractId": market_id, "amount": int(amount)}
+        return self._request("POST", f"market/{market_id}/add-liquidity",
+                             data={"amount": int(amount)})
 
     def batch_bet(self, bets: list[dict]) -> Any:
         """Up to 50 bets. Each: {contractId, outcome, amount,
