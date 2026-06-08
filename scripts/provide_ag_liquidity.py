@@ -77,8 +77,18 @@ def main() -> None:
     ap.add_argument("--budget", type=float, default=30000.0, help="total mana cap across all markets")
     ap.add_argument("--reserve", type=float, default=2000.0, help="keep at least this much account balance")
     ap.add_argument("--max-markets", type=int, default=100000, help="cap number of markets (default: all)")
+    ap.add_argument("--no-skip-logged", action="store_true",
+                    help="re-fund markets already in the liquidity log (default: skip them — "
+                         "the local cache doesn't reflect prior adds, so skipping prevents double-funding)")
     ap.add_argument("--execute", action="store_true", help="actually add liquidity (else preview only)")
     args = ap.parse_args()
+
+    # Markets already funded in a prior run. add-liquidity does NOT update the local
+    # market_cache, so totalLiquidity here is the PRE-funding value — without this skip
+    # a re-run would top the already-deep markets again. Idempotent re-runs by default.
+    already: set[str] = set()
+    if not args.no_skip_logged and LOG_PATH.exists():
+        already = {e["market_id"] for e in json.loads(LOG_PATH.read_text())}
 
     cfg = load_bot(args.bot)
     inc = cfg.params.get("include_terms")
@@ -92,8 +102,10 @@ def main() -> None:
     with Store() as st:
         markets = st.load_open_markets()
 
-    # in-scope, neediest (thinnest) first
-    scope = [m for m in markets if in_scope(m.get("question", "") or "", include_re, exclude_re)]
+    # in-scope, neediest (thinnest) first, excluding already-funded markets
+    scope = [m for m in markets
+             if in_scope(m.get("question", "") or "", include_re, exclude_re)
+             and m["id"] not in already]
     scope.sort(key=_liq)
 
     spend_cap = min(args.budget, max(balance - args.reserve, 0.0))
@@ -115,6 +127,8 @@ def main() -> None:
         total += add
 
     print(f"bot={args.bot}  account balance Ṁ{balance:,.0f}  (reserve Ṁ{args.reserve:,.0f})")
+    if already:
+        print(f"skipping {len(already)} already-funded markets (from {LOG_PATH.name})")
     print(f"scope: {len(scope)} in-scope ag markets | target depth {args.target:g}, "
           f"per-market ≤{args.per_market:g}, budget Ṁ{args.budget:,.0f} → spend cap Ṁ{spend_cap:,.0f}")
     print(f"PLAN: provide liquidity to {len(plan)} markets, total Ṁ{total:,.0f}\n")
