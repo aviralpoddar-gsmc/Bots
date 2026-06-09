@@ -34,6 +34,13 @@ BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
 # until that book fully closes, then drop it from this list.
 RESOLVE_ALSO=("commodity_spot_1")
 
+# PAPER bots: run DRY-RUN every cycle (never --live) to ACCUMULATE + VALIDATE before
+# committing capital. 007/news_drift_1 is here while its news edge is unproven — `process`
+# already persists SIG_<COM>_NEWS daily (building the time series), and this logs what 007
+# WOULD trade. Promote to BOTS (live) only after the lead/lag gate passes
+# (scripts/validate_news_leadlag.py). Added 2026-06-09.
+PAPER_BOTS=("news_drift_1")
+
 cd "$REPO" || exit 1
 # shellcheck disable=SC1090
 source "$VENV"
@@ -61,6 +68,11 @@ done
 # 3. Trade each bot.
 for bot in "${BOTS[@]}"; do
   run quantbots run --bot "$bot" $LIVE_FLAG || log "run $bot failed"
+done
+
+# 3b. Paper bots: ALWAYS dry-run (no --live) — accumulate/validate, never trade.
+for bot in "${PAPER_BOTS[@]}"; do
+  run quantbots run --bot "$bot" || log "paper run $bot failed"
 done
 
 # 4. Roll up PnL + leaderboard snapshot.
