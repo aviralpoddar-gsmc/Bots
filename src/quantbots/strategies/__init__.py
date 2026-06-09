@@ -41,6 +41,7 @@ _REGISTRY: dict[str, str] = {
     "stockpile_grid_arb": "quantbots.strategies.stockpile_grid_arb:StockpileGridArbStrategy",
     "stockpile_coherence": "quantbots.strategies.stockpile_coherence:StockpileCoherenceStrategy",
     "market_maker": "quantbots.strategies.market_maker:MarketMakerStrategy",
+    "news_drift": "quantbots.strategies.news_drift:NewsDriftStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
 }
 

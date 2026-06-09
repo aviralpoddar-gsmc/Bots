@@ -79,6 +79,8 @@ DEFAULT_BOTS: dict[str, tuple[str, str]] = {
     "market_maker_1": ("MarketMakerBot", "Market Maker Bot (AP)"),
     "llm_ag_coverage": ("LlmAgCoverageBot", "LLM Ag Coverage Bot (AP)"),
     "diffusion_mc_1": ("DiffusionMcBot", "Diffusion MC Bot (AP)"),
+    # 007 — deliberately NO "(AP)" suffix (per request): display name is just "007".
+    "news_drift_1": ("Bot007", "007"),
     # USDA softs bots. cotton already minted as @Cottonfundamental1 (display renamed
     # to add the "(AP)" suffix via POST /v0/me/update); listed here for consistency.
     "cotton_fundamental_1": ("Cottonfundamental1", "Cotton Fundamental 1 (AP)"),

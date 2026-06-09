@@ -759,3 +759,40 @@ bots:
       k: 1.0                     # drift per 1.0 (100%) ending-stocks surprise
       min_surprise: 0.01         # ignore revisions smaller than 1%
       drift_cap: 0.10            # WASDE moves can be large -> wider cap than the level bot
+
+  # === 007 — the news-driven commodity bot (NO "(AP)" tag, per request) ===
+  # Single-source alpha = DIGESTED COMMODITY NEWS. The rss source ingests three
+  # verified-keyless feeds (Investing.com Commodities [centerpiece], OilPrice.com,
+  # Mining.com); a LOCAL LLM (llm/news_extractor.py) classifies each headline into a
+  # signed per-commodity direction; processing.compute_news_signal aggregates them into
+  # a recency-decayed, confidence-weighted SIG_<COM>_NEWS in [-1,1]; this bot turns that
+  # into a small bounded price drift and prices the resolving commodity price ladders.
+  # ⚠️ enabled:false until the lead/lag validation gate passes (news sentiment is
+  # low-Sharpe + fast-decaying, and the live price already reflects public news — the
+  # bot must be shown to LEAD price before live capital). Account @Bot007 has NO "(AP)"
+  # suffix (unique in the fleet). LOCAL inference only for alpha; comments may be hosted.
+  - name: news_drift_1
+    strategy: news_drift
+    account_env: NEWS_DRIFT_1_API_KEY     # own account: @Bot007 (display "007", no AP tag)
+    enabled: false
+    limits:
+      max_order_size: 300
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.05
+      per_group_pct: 0.40        # multi-commodity catalog -> cap any one commodity
+      min_ev: 0.05
+      min_resolvability: 0.04    # price markets only — where the edge actually pays
+      max_run_budget: 10000
+      max_total_exposure: 15000
+      max_group_exposure: 5000
+      dry_run_sample: 25
+      llm_comments: true
+      llm_model: mercury-2       # hosted (Inception) — COMMENTS ONLY; alpha stays LOCAL
+    params:
+      k: 0.08                    # drift per unit of signed news consensus (raw in [-1,1])
+      min_conviction: 0.25       # |raw| floor: ignore near-neutral news
+      min_items: 2               # need >= 2 qualifying headlines to trade
+      drift_cap: 0.10            # hard bound on the news drift
+      min_drift: 0.005           # abstain if the resulting drift is negligible
+      max_horizon_years: 1.0     # news decays fast -> never drift far-dated strikes

@@ -52,12 +52,21 @@ sources:
         - { entity: US_GDP_GROWTH, country: US, code: NY.GDP.MKTP.KD.ZG }
         - { entity: US_UNEMPLOYMENT, country: US, code: SL.UEM.TOTL.ZS }
 
-  # News / text feeds (keyless). Add commodity/macro RSS feeds here.
+  # News / text feeds (keyless). Digested by the local-LLM news extractor into
+  # SIG_<COM>_NEWS signals for the news_drift bot ("007"). All three verified live
+  # (HTTP 200, keyless, stdlib-parseable) by the 2026-06-09 source-research workflow.
   - name: rss
     enabled: true
     params:
-      max_items: 30
+      max_items: 50            # rolling windows are small; keep a wider catch per pull
       feeds:
+        # CENTERPIECE: broadest single-feed coverage of the clone's resolving (price)
+        # commodities, with direction in the headline ("Oil falls...", "Gold edges up...").
+        - { entity: INVESTING_COMMODITIES, url: "https://www.investing.com/rss/news_11.rss" }
+        # Energy supply/demand-shock color (WTI/Brent/gasoline/natgas). EXACT path only.
+        - { entity: OILPRICE_MAIN, url: "https://oilprice.com/rss/main" }
+        # Metals supply-shock overlay (gold/silver/copper); down-weighted, noisier.
+        - { entity: MINING_DOT_COM, url: "https://www.mining.com/feed/" }
         - { entity: EIA_TODAY_IN_ENERGY, url: "https://www.eia.gov/rss/todayinenergy.xml" }
 
   # USDA FAS PSD world supply/demand (keyless bulk CSV). Emits

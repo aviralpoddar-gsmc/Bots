@@ -27,3 +27,4 @@ dist/
 data/account-baseline-*.json
 data/dryrun-report-*.md
 data/*.live.log
+data/ag_liquidity_log.json

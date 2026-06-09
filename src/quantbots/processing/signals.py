@@ -325,6 +325,125 @@ def compute_cocoa_stocks(window: int = 156) -> list[Observation]:
     )]
 
 
+NEWS_FEEDS = ["INVESTING_COMMODITIES", "OILPRICE_MAIN", "MINING_DOT_COM", "EIA_TODAY_IN_ENERGY"]
+
+
+def _parse_ts(ts: str | None):
+    """Best-effort parse of an RSS pubDate / ISO ts -> aware UTC datetime, or None.
+    Handles RFC-822 (oilprice/mining) and 'YYYY-MM-DD HH:MM:SS' / ISO (investing)."""
+    from datetime import datetime, timezone
+    from email.utils import parsedate_to_datetime
+    if not ts:
+        return None
+    try:
+        dt = parsedate_to_datetime(ts)
+        if dt is not None:
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError, IndexError):
+        pass
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(ts[:19], fmt).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            continue
+    try:
+        dt = datetime.fromisoformat(ts)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _ollama_reachable(timeout: float = 3.0) -> bool:
+    import urllib.request
+    from ..llm.client import DEFAULT_BASE_URL
+    url = DEFAULT_BASE_URL.rsplit("/v1", 1)[0] + "/api/tags"
+    try:
+        urllib.request.urlopen(url, timeout=timeout)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def compute_news_signal(store: Any, feeds: list[str] | None = None, halflife_h: float = 36.0,
+                        window_hours: float = 96.0, model: str = "gemma4:latest",
+                        classify_fn: Any = None, now: Any = None) -> list[Observation]:
+    """Digest recent commodity headlines into SIG_<COM>_NEWS observations: a
+    recency-decayed, confidence-weighted MEAN SIGNED direction per commodity, in
+    [-1, 1] (the 007 / news_drift signal). Classification is LOCAL-LLM, cached by
+    headline hash (source='news_parse') so re-runs skip the model. ts ordering on
+    RSS rows is unreliable (mixed RFC-822/ISO), so freshness is filtered by PARSED
+    age in Python, not the SQL `since`. `classify_fn` lets tests inject a fake
+    classifier (no network); `now` is injectable for deterministic tests."""
+    import hashlib
+    import json as _json
+    from datetime import datetime, timezone
+
+    from ..llm.news_extractor import COMMODITY_TO_ENTITY
+    from ..llm.news_extractor import classify as _llm_classify
+
+    feeds = feeds or NEWS_FEEDS
+    now = now or datetime.now(timezone.utc)
+
+    if classify_fn is None:
+        if not _ollama_reachable():
+            logger.info("news signal: local LLM endpoint unreachable — skipping")
+            return []
+        from ..llm.client import LocalLLM
+        llm = LocalLLM(model=model)
+        classify_fn = lambda h: _llm_classify(h, llm)  # noqa: E731
+
+    def com_short(entity: str) -> str:
+        return entity.replace("CME_", "").replace("_OIL", "")
+
+    agg: dict[str, list] = {}
+    to_cache: list[Observation] = []
+    for feed in feeds:
+        for it in store.load_observations(entity=feed, source="rss", limit=500):
+            text = (it.get("text") or "").strip()
+            if not text:
+                continue
+            dt = _parse_ts(it.get("ts"))
+            if dt is None:
+                continue  # can't establish freshness -> skip (don't risk stale)
+            age_h = (now - dt).total_seconds() / 3600.0
+            if age_h < 0 or age_h > window_hours:
+                continue
+            key = f"NP:{hashlib.md5(text.encode()).hexdigest()[:16]}"
+            cached = store.latest_observation(entity=key, source="news_parse")
+            if cached:
+                p = cached.get("payload")
+                rec = _json.loads(p) if isinstance(p, str) else (p or {})
+            else:
+                rec = classify_fn(text)
+                to_cache.append(Observation(source="news_parse", entity=key,
+                                            ts=it.get("ts") or now.isoformat(),
+                                            text=text[:200], payload=rec))
+            if not rec or not rec.get("is_price_event") or not rec.get("commodity"):
+                continue
+            entity = COMMODITY_TO_ENTITY.get(rec["commodity"])
+            if not entity:
+                continue
+            w = math.exp(-age_h / halflife_h) if halflife_h > 0 else 1.0
+            agg.setdefault(com_short(entity), []).append(
+                (w, float(rec.get("confidence", 0.0)), int(rec.get("direction", 0)), text))
+    if to_cache:
+        store.upsert_observations(to_cache)
+
+    out: list[Observation] = []
+    for com, rows in agg.items():
+        wc = sum(w * c for w, c, _, _ in rows)
+        if wc <= 0:
+            continue
+        raw = sum(w * c * d for w, c, d, _ in rows) / wc  # in [-1, 1]
+        top = [t for _, _, _, t in sorted(rows, key=lambda r: -(r[0] * r[1]))[:3]]
+        out.append(Observation(
+            source="signal", entity=f"SIG_{com}_NEWS", ts=now.isoformat(), value=raw,
+            payload={"n_items": len(rows), "n_pos": sum(1 for _, _, d, _ in rows if d > 0),
+                     "n_neg": sum(1 for _, _, d, _ in rows if d < 0), "raw": raw,
+                     "halflife_h": halflife_h, "top_headlines": top}))
+    return out
+
+
 def run_all(store: Any, commodities: list[str] | None = None) -> int:
     """Compute all signals and upsert them. Returns count written."""
     commodities = commodities or ["cotton", "cocoa", "coffee"]
@@ -338,6 +457,10 @@ def run_all(store: Any, commodities: list[str] | None = None) -> int:
     obs += compute_atl3_cocoa()
     obs += compute_cotton_drought()
     obs += compute_cocoa_stocks()
+    try:
+        obs += compute_news_signal(store)  # LOCAL-LLM news digestion (the 007 signal)
+    except Exception as e:  # noqa: BLE001 - a news/LLM hiccup must not sink the other signals
+        logger.warning("news signal failed: %s", e)
     n = store.upsert_observations(obs) if obs else 0
     logger.info("processing: wrote %d signals (%s)", n, ", ".join(o.entity for o in obs))
     return n
