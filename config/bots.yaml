@@ -767,14 +767,16 @@ bots:
   # signed per-commodity direction; processing.compute_news_signal aggregates them into
   # a recency-decayed, confidence-weighted SIG_<COM>_NEWS in [-1,1]; this bot turns that
   # into a small bounded price drift and prices the resolving commodity price ladders.
-  # ⚠️ enabled:false until the lead/lag validation gate passes (news sentiment is
-  # low-Sharpe + fast-decaying, and the live price already reflects public news — the
-  # bot must be shown to LEAD price before live capital). Account @Bot007 has NO "(AP)"
-  # suffix (unique in the fleet). LOCAL inference only for alpha; comments may be hosted.
+  # LIVE 2026-06-09 (user: "full live, normal caps") — in daily_cycle.sh BOTS rotation.
+  # ⚠️ EDGE STILL UNPROVEN: news sentiment is low-Sharpe + fast-decaying and the live price
+  # already reflects public news, so the lead/lag validation (scripts/validate_news_leadlag.py)
+  # keeps running in PARALLEL; re-check ~2026-06-23 and pull back if it shows no forward lead.
+  # Natural per-run stake is small (~Ṁ250, thin ag/metal markets) despite the Ṁ15k cap.
+  # Account @Bot007 has NO "(AP)" suffix (unique in the fleet). LOCAL inference only for alpha.
   - name: news_drift_1
     strategy: news_drift
     account_env: NEWS_DRIFT_1_API_KEY     # own account: @Bot007 (display "007", no AP tag)
-    enabled: false
+    enabled: true
     limits:
       max_order_size: 300
       liquidity_pct: 0.25

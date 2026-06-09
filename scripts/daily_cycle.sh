@@ -25,7 +25,8 @@ BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
       "stockpile_facts_1" "stockpile_grid_arb_1" "stockpile_coherence_1" "pair_trading_1" \
       "cotton_fundamental_1" "cftc_softs_1" "weather_cocoa_1" "nass_cotton_1" \
       "cocoa_fundamental_1" "coffee_consumption_1" "fas_balance_1" "wasde_cotton_1" \
-      "surface_arb_1" "ensemble_1" "commodity_1" "enso_1" "mean_reverter" "llm_forecaster")
+      "surface_arb_1" "ensemble_1" "commodity_1" "enso_1" "mean_reverter" "llm_forecaster" \
+      "news_drift_1")
 
 # Retired bots that still hold OPEN positions: RESOLVE-ONLY (never traded), so their legacy
 # book keeps realizing PnL / syncing resolutions after being pulled from BOTS. Removing a bot
@@ -34,12 +35,11 @@ BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
 # until that book fully closes, then drop it from this list.
 RESOLVE_ALSO=("commodity_spot_1")
 
-# PAPER bots: run DRY-RUN every cycle (never --live) to ACCUMULATE + VALIDATE before
-# committing capital. 007/news_drift_1 is here while its news edge is unproven — `process`
-# already persists SIG_<COM>_NEWS daily (building the time series), and this logs what 007
-# WOULD trade. Promote to BOTS (live) only after the lead/lag gate passes
-# (scripts/validate_news_leadlag.py). Added 2026-06-09.
-PAPER_BOTS=("news_drift_1")
+# PAPER bots: run DRY-RUN every cycle (never --live) to accumulate/validate before live.
+# (Empty now: news_drift_1 was promoted to the live BOTS array 2026-06-09 per user, with
+# its lead/lag validation continuing in parallel via scripts/validate_news_leadlag.py +
+# the SIG_<COM>_NEWS history that `process` keeps persisting daily.)
+PAPER_BOTS=()
 
 cd "$REPO" || exit 1
 # shellcheck disable=SC1090
@@ -71,7 +71,9 @@ for bot in "${BOTS[@]}"; do
 done
 
 # 3b. Paper bots: ALWAYS dry-run (no --live) — accumulate/validate, never trade.
-for bot in "${PAPER_BOTS[@]}"; do
+# Empty-array-safe under `set -u` / bash 3.2 (the [:-] fallback + skip blank).
+for bot in "${PAPER_BOTS[@]:-}"; do
+  [ -z "$bot" ] && continue
   run quantbots run --bot "$bot" || log "paper run $bot failed"
 done
 
