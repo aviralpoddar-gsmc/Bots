@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from typing import Any
 
 from ._model import norm_cdf, years_to_close
@@ -89,9 +90,13 @@ class SignalDriftStrategy(Strategy):
         return None
 
     def prefilter(self, markets: list[Market]) -> list[Market]:
+        # closeTime is epoch ms; closed-but-unresolved markets reject bets (403
+        # "Trading is closed") and years_to_close floors at 0 so it can't catch them.
+        now_ms = time.time() * 1000
         return [
             m for m in markets
             if not m.get("isResolved")
+            and not (m.get("closeTime") and m["closeTime"] <= now_ms)
             and self._spec(m.get("question", "")) is not None
             and years_to_close(m) <= self.max_horizon_years
         ]
