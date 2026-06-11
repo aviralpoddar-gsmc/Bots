@@ -1,6 +1,7 @@
 from quantbots.backtest import BacktestResult, _reliability, _simulate, backtest
 from quantbots.sizing import DEFAULT_LIMITS
 from quantbots.strategies import get_strategy
+from quantbots.strategies.base import Strategy
 
 
 def test_simulate_profits_when_all_correct():
@@ -43,3 +44,20 @@ def test_backtest_end_to_end_on_synthetic_series():
     assert r.n > 0
     assert 0.0 <= r.brier <= 1.0
     assert r.bets >= 0
+
+
+def test_backtest_attaches_threshold_for_ladder_strategies():
+    # llm / mercury_ensemble read m["threshold"]; backtest must parse it from the
+    # question it builds so those strategies can be graded.
+    class ThresholdNeeding(Strategy):
+        name = "tn"
+
+        def estimate(self, group):
+            return {m["id"]: 0.6 for m in group if m.get("threshold") is not None}
+
+    series = [(f"2020-{i:03d}", 100.0 + i) for i in range(40)]
+    r = backtest(
+        ThresholdNeeding(), "E", "Will X exceed {T}?", series,
+        horizon_steps=8, horizon_years=0.25, threshold_fracs=(1.0,),
+    )
+    assert r.n > 0
