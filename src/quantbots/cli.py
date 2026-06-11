@@ -332,13 +332,26 @@ _BACKTEST_PRESETS = {
 }
 
 
+def _parse_param_override(token: str) -> tuple[str, object]:
+    """Parse a `key=value` override, coercing value to int/float when possible."""
+    key, sep, value = token.partition("=")
+    if not sep:
+        raise typer.BadParameter(f"--param must be key=value, got {token!r}")
+    for cast in (int, float):
+        try:
+            return key, cast(value)
+        except ValueError:
+            continue
+    return key, value
+
+
 @app.command()
 def backtest(
     preset: str = typer.Option("mortgage", help=f"One of {list(_BACKTEST_PRESETS)}"),
     horizon_months: int = typer.Option(6, help="Forecast horizon to test"),
     strategy: str = typer.Option(None, help="Override the preset's strategy (e.g. mercury_ensemble) for A/B"),
     limit: int = typer.Option(0, help="Use only the most recent N series points (bounds LLM cost)"),
-    n_samples: int = typer.Option(0, help="Override ensemble sample count (mercury_ensemble only)"),
+    param: list[str] = typer.Option([], "--param", help="Override a strategy param, e.g. --param n_samples=5 (repeatable)"),
 ) -> None:
     """Measure a bot's calibration + simulated PnL on real historical data."""
     from .backtest import backtest as run_backtest
@@ -353,10 +366,9 @@ def backtest(
         series = series[-limit:]
     console.print(f"[cyan]{preset}[/] · [magenta]{strat_name}[/]: {len(series)} points {series[0][0]}..{series[-1][0]}")
 
-    # Use the configured params for that strategy if present.
-    params = next((b.params for b in load_bots() if b.strategy == strat_name), {})
-    if n_samples and strat_name == "mercury_ensemble":
-        params = {**params, "n_samples": n_samples, "min_quorum": max(1, n_samples // 2)}
+    # Configured params for that strategy, with --param overrides applied on top.
+    params = {**next((b.params for b in load_bots() if b.strategy == strat_name), {}),
+              **dict(_parse_param_override(t) for t in param)}
     strat = get_strategy(strat_name, **params)
     steps = max(1, round(p["steps_per_year"] * horizon_months / 12))
 
