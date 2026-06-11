@@ -365,7 +365,7 @@ bots:
   - name: mercury_ensemble_1
     strategy: mercury_ensemble
     account_env: MANIFOLD_CLONE_API_KEY
-    enabled: false
+    enabled: true
     limits:
       max_order_size: 50
       hold_band: 0.05
