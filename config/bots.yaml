@@ -364,7 +364,7 @@ bots:
   # (dry-run) before enabling. Key comes from INCEPTION_API_KEY (Inception=Mercury).
   - name: mercury_ensemble_1
     strategy: mercury_ensemble
-    account_env: MANIFOLD_CLONE_API_KEY
+    account_env: MERCURY_ENSEMBLE_1_API_KEY   # own account: @MercuryEnsembleBot (minted 2026-06-11, Ṁ25k)
     enabled: true
     limits:
       max_order_size: 50
