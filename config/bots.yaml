@@ -358,6 +358,31 @@ bots:
       conf_cap: 0.75      # never bet >75% conviction (obscure markets -> hallucination risk)
       max_groups: 12      # cap LLM calls per run (~50s each on 32b)
 
+  # === MERCURY ENSEMBLE (HOSTED inference — sanctioned exception) ===
+  # Bayesian-mixture calibration bot. See docs/mercury-ensemble-calibration.md.
+  # Disabled by default: validate via `quantbots run --bot mercury_ensemble_1`
+  # (dry-run) before enabling. Key comes from INCEPTION_API_KEY (Inception=Mercury).
+  - name: mercury_ensemble_1
+    strategy: mercury_ensemble
+    account_env: MANIFOLD_CLONE_API_KEY
+    enabled: false
+    limits:
+      max_order_size: 50
+      hold_band: 0.05
+      max_run_budget: 150
+    params:
+      model: mercury-2
+      n_samples: 20
+      min_quorum: 12
+      temperature_lo: 0.4
+      temperature_hi: 1.0
+      sample_concurrency: 5           # gentle on Mercury's rate limit; SDK retries+backs off
+      epistemic_tau: 0.04             # shrinkage scale on Var of probability; tune in backtest
+      direction_agreement_floor: 0.70 # abstain unless a 70% sample supermajority agrees
+      spread_mult: 1.1                # less widening than llm's 1.25 — the mixture self-widens
+      conf_cap: 0.80
+      max_groups: 12
+
   # === COSMETIC DEMO COVERAGE (local LLM) — the AG quantity "50% sea" ===
   # These quantity/demand/production/stocks markets have NO fundamental data source
   # and ~never resolve, so no anchored bot prices them. This bot uses the LOCAL LLM

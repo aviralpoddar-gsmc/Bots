@@ -43,6 +43,8 @@ _REGISTRY: dict[str, str] = {
     "market_maker": "quantbots.strategies.market_maker:MarketMakerStrategy",
     "news_drift": "quantbots.strategies.news_drift:NewsDriftStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
+    # Hosted-inference exception (see docs/mercury-ensemble-calibration.md).
+    "mercury_ensemble": "quantbots.strategies.mercury_ensemble:MercuryEnsembleStrategy",
 }
 
 

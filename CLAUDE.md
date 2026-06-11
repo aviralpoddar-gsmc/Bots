@@ -66,6 +66,13 @@ until bots are demonstrably profitable. The `llm/` client speaks the
 OpenAI-compatible protocol but points at a **local** endpoint. Flag anything that
 would require hosted inference.
 
+**Sanctioned exception — `mercury_ensemble`.** This one strategy intentionally
+uses hosted inference (Mercury / Inception Labs) as an owner-approved experiment
+to evaluate it as a forecasting engine. It is engine-agnostic and reverts to the
+local model if it does not beat the local `llm` baseline. See
+`docs/mercury-ensemble-calibration.md` §0. The carve-out applies to that strategy
+only — the local-only rule still holds for every other LLM strategy.
+
 ## Secrets
 
 Provided via env / Doppler — never commit them. See `.env.example`:
