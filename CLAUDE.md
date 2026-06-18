@@ -58,6 +58,15 @@ This is the single most important fact for setting expectations. See
 - A `dry_run` bet validates auth + payload without moving mana — the safest first
   call.
 
+**Sanctioned exception — `equity_options/`.** The fenced package
+`src/quantbots/equity_options/` trades **real listed options** via Alpaca as an
+owner-approved carve-out from the clone-only rule. It **must not import `manifold/`**
+(enforced by `tests/test_eo_safety.py`), is never wired into `runner.py`/`cli.py`/the
+strategy registry/`daily_cycle.sh`, and has its own `eo` CLI + DB + ops loop. Execution
+is staged **dry → paper → gated-live**; `execution/live.py` is a refusing stub (paper
+is the ceiling). See `src/quantbots/equity_options/SAFETY.md`. The carve-out applies to
+that package only — the clone-only rule still holds everywhere else.
+
 ## Local compute only (for LLM strategies)
 
 LLM strategies must use **locally-running models** (Ollama / llama.cpp / vLLM /

@@ -1,0 +1,201 @@
+underlyings:
+- ticker: USO
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+95.5
+  beta_lookback_days: 504
+- ticker: GDX
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+40.3
+  beta_lookback_days: 504
+- ticker: GDXJ
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+38.8
+  beta_lookback_days: 504
+- ticker: SIL
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+35.4
+  beta_lookback_days: 504
+- ticker: WPM
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+34.5
+  beta_lookback_days: 504
+- ticker: AEM
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+34.4
+  beta_lookback_days: 504
+- ticker: NEM
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+29.2
+  beta_lookback_days: 504
+- ticker: XLE
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+29.0
+  beta_lookback_days: 504
+- ticker: COPX
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+28.9
+  beta_lookback_days: 504
+- ticker: PAAS
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+28.8
+  beta_lookback_days: 504
+- ticker: XOM
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+27.5
+  beta_lookback_days: 504
+- ticker: COP
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+27.4
+  beta_lookback_days: 504
+- ticker: APA
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+27.0
+  beta_lookback_days: 504
+- ticker: FNV
+  commodity: GOLD
+  market_ticker: SPY
+  name: GOLD predictor lag0 t+26.4
+  beta_lookback_days: 504
+- ticker: EOG
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+26.4
+  beta_lookback_days: 504
+- ticker: FANG
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+26.3
+  beta_lookback_days: 504
+- ticker: AG
+  commodity: SILVER
+  market_ticker: SPY
+  name: SILVER predictor lag0 t+26.0
+  beta_lookback_days: 504
+- ticker: OXY
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+25.6
+  beta_lookback_days: 504
+- ticker: HL
+  commodity: SILVER
+  market_ticker: SPY
+  name: SILVER predictor lag0 t+25.5
+  beta_lookback_days: 504
+- ticker: DVN
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+25.1
+  beta_lookback_days: 504
+- ticker: CVX
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+23.9
+  beta_lookback_days: 504
+- ticker: OIH
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+23.4
+  beta_lookback_days: 504
+- ticker: HAL
+  commodity: BRENT_OIL
+  market_ticker: SPY
+  name: BRENT_OIL predictor lag0 t+23.3
+  beta_lookback_days: 504
+- ticker: SCCO
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+22.2
+  beta_lookback_days: 504
+- ticker: FCX
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+21.6
+  beta_lookback_days: 504
+- ticker: VLO
+  commodity: GASOLINE
+  market_ticker: SPY
+  name: GASOLINE predictor lag0 t+18.9
+  beta_lookback_days: 504
+- ticker: PSX
+  commodity: BRENT_OIL
+  market_ticker: SPY
+  name: BRENT_OIL predictor lag0 t+18.6
+  beta_lookback_days: 504
+- ticker: BHP
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+18.5
+  beta_lookback_days: 504
+- ticker: TECK
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+18.0
+  beta_lookback_days: 504
+- ticker: MPC
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+17.8
+  beta_lookback_days: 504
+- ticker: EQT
+  commodity: NATGAS
+  market_ticker: SPY
+  name: NATGAS predictor lag0 t+17.7
+  beta_lookback_days: 504
+- ticker: SLB
+  commodity: BRENT_OIL
+  market_ticker: SPY
+  name: BRENT_OIL predictor lag0 t+17.2
+  beta_lookback_days: 504
+- ticker: RIO
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+17.2
+  beta_lookback_days: 504
+- ticker: AR
+  commodity: NATGAS
+  market_ticker: SPY
+  name: NATGAS predictor lag0 t+17.0
+  beta_lookback_days: 504
+- ticker: BKR
+  commodity: BRENT_OIL
+  market_ticker: SPY
+  name: BRENT_OIL predictor lag0 t+15.8
+  beta_lookback_days: 504
+- ticker: RRC
+  commodity: NATGAS
+  market_ticker: SPY
+  name: NATGAS predictor lag0 t+15.6
+  beta_lookback_days: 504
+- ticker: VALE
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+15.0
+  beta_lookback_days: 504
+- ticker: LYB
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+14.6
+  beta_lookback_days: 504
+- ticker: CF
+  commodity: WTI_OIL
+  market_ticker: SPY
+  name: WTI_OIL predictor lag0 t+14.6
+  beta_lookback_days: 504
+- ticker: AA
+  commodity: COPPER
+  market_ticker: SPY
+  name: COPPER predictor lag0 t+13.6
+  beta_lookback_days: 504

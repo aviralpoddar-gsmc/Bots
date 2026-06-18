@@ -1,0 +1,92 @@
+# equity_options — REAL listed-options bot config (FENCED package).
+#
+# This is NOT a clone bot. See src/quantbots/equity_options/SAFETY.md.
+# Secrets are never here — Alpaca keys come from env (ALPACA_API_KEY / ALPACA_SECRET_KEY).
+
+# Execution mode: dry | paper | live.
+#   dry   = no broker calls, prints intended orders (default, safe).
+#   paper = Alpaca paper account (no real money).
+#   live  = REFUSED unless EQUITY_OPTIONS_OWNER_APPROVAL=1 + risk-limits file (not in this build).
+broker: dry
+
+# Which option structures the selector may use. Verticals need Alpaca approval L3.
+structures:
+  # Debit (BUY premium) — directional / vol-buying, defined risk.
+  - long_call
+  - long_put
+  - bull_call_spread   # debit, bullish
+  - bear_put_spread    # debit, bearish
+  # Credit (SELL premium) are BUILT + tested but DISABLED by default: backtesting
+  # showed they LOSE unhedged (short upside legs run over in a trending market —
+  # harvesting the variance risk premium needs delta-hedging, which isn't built).
+  # Re-enable only alongside a delta-hedging overlay or a real directional signal.
+  # - bull_put_spread
+  # - bear_call_spread
+  # - iron_condor
+
+# The tradable universe: commodity-linked equities with liquid options chains.
+# `commodity` must be a key in research.data_fetch.DEFAULT_UNIVERSE (the price feed).
+# `market_ticker` is the market-factor proxy for the beta regression (fetched via yfinance).
+underlyings:
+  - {ticker: FCX, commodity: COPPER,   market_ticker: SPY, name: "Freeport-McMoRan (copper)"}
+  - {ticker: NEM, commodity: GOLD,     market_ticker: SPY, name: "Newmont (gold)"}
+  - {ticker: GDX, commodity: GOLD,     market_ticker: SPY, name: "Gold miners ETF"}
+  - {ticker: XOM, commodity: WTI_OIL,  market_ticker: SPY, name: "ExxonMobil (oil)"}
+  - {ticker: CVX, commodity: WTI_OIL,  market_ticker: SPY, name: "Chevron (oil)"}
+  - {ticker: SLB, commodity: WTI_OIL,  market_ticker: SPY, name: "Schlumberger (oil services)"}
+  - {ticker: HL,  commodity: SILVER,   market_ticker: SPY, name: "Hecla Mining (silver)", enabled: false}
+
+# Forecast channel toggles. v1 = deterministic commodity-beta + diffusion only.
+forecast:
+  mode: momentum            # directional signal: commodity TSMOM -> bull/bear spread (validated). drift_neutral disables.
+  llm_enabled: false        # local-LLM mixture channel (off; requires local model per CLAUDE.md)
+  tal_enabled: false        # tal measurables channel (off; auth-blocked seam)
+  diffusion:
+    period: "10y"
+    n_sims: 20000
+    process: ksb            # kernel-smoothed block bootstrap (diffusion_mc default)
+  idio_floor: 0.05          # min idiosyncratic annual vol added to the equity forecast
+  beta_shrink: 0.30         # shrink OLS betas toward 0 by this fraction (instability guard)
+
+# Per-position and portfolio risk limits (USD premium + greek budgets), scaled to a
+# ~$97k account. Sizing is fractional-Kelly (kelly_fraction) against live account
+# equity; these are the OUTER bounds. All structures are DEFINED-RISK (debit), so
+# "premium" is also the maximum loss — the premium caps ARE the loss caps.
+risk_limits:
+  max_premium_per_trade: 12000.0       # <= ~12% of equity at risk on one position
+  max_premium_per_underlying: 15000.0  # also the per-COMMODITY cap (correlation control)
+  max_total_premium: 50000.0           # <= ~half the account deployed in option premium
+  kelly_fraction: 0.25                 # 1/4-Kelly on each position's P&L distribution
+  min_premium: 50.0
+  min_open_interest: 100
+  max_rel_spread: 0.15
+  min_dte: 14
+  max_dte: 120
+  min_edge_return: 0.05      # model edge must be >= 5% of capital-at-risk to trade
+  # Portfolio greek budgets — generous enough not to block Kelly-sized positions,
+  # but still bounding net exposure (vega = $ per vol-point, theta = $ per day).
+  max_net_vega: 80000.0
+  max_net_theta: 8000.0
+  max_gross_gamma: 40000.0
+
+# Exit / position-management rules. Checked daily by `eo manage`; a position closes
+# when ANY rule fires (priority: DTE/assignment guard -> profit target -> stop loss).
+manage:
+  profit_target_frac: 0.60   # take 60% of a vertical's max profit
+  stop_loss_frac: 0.60       # cut at 60% of premium-at-risk lost
+  min_hold_dte: 10           # close inside 10 days to expiry regardless
+  assignment_dte: 21         # if the short leg is ITM within this DTE, close (assignment guard)
+
+# Backtest validation gate. `eo trade` only OPENS a name whose walk-forward backtest
+# cleared this bar within max_age_days (refreshed by `eo backtest`). Set required:false
+# to trade without the gate (NOT recommended). The bar is deliberately strict — a
+# marginal pass is a fail (a >0 threshold just rubber-stamps noise).
+gate:
+  required: true   # RE-ENABLED 2026-06-18: ungated trading lost ~$3.2k/day (no edge).
+  min_trades: 12
+  min_brier_skill: 0.02
+  min_sharpe: 0.25
+  max_age_days: 14
+
+# LIVE gate (unused in this build; live.py refuses regardless).
+risk_limits_file: config/equity_options_risk_limits.yaml

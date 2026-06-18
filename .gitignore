@@ -28,3 +28,7 @@ data/account-baseline-*.json
 data/dryrun-report-*.md
 data/*.live.log
 data/ag_liquidity_log.json
+data/equity_options_gate.json
+# equity_options derived data (regenerable): tal Snowflake cache + research artifacts.
+data/tal/
+data/metal_correlation_matrix.*

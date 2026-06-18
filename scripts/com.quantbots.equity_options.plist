@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: run the equity_options daily cycle once per day at 10:00 local.
+
+  This trades REAL options on Alpaca PAPER (no real money). It is SEPARATE from
+  com.quantbots.daily (the play-money clone). See src/quantbots/equity_options/SAFETY.md.
+
+  Install:
+    cp scripts/com.quantbots.equity_options.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.quantbots.equity_options.plist
+
+  Disable (stop the daily options cycle):
+    launchctl unload ~/Library/LaunchAgents/com.quantbots.equity_options.plist
+
+  Run once now (manual trigger):
+    launchctl start com.quantbots.equity_options
+
+  Logs: data/equity_options.out.log and data/equity_options.err.log in the repo.
+
+  To run DRY (no broker submits), set EO_PAPER to 0 below.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.quantbots.equity_options</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mikhail/Bots/scripts/equity_options_cycle.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mikhail/Bots</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- 1 = submit to Alpaca PAPER each cycle; set 0 for dry-run only. -->
+        <key>EO_PAPER</key>
+        <string>1</string>
+    </dict>
+
+    <!-- 10:00 local: ~30 min after the US cash open, so option quotes have settled. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mikhail/Bots/data/equity_options.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mikhail/Bots/data/equity_options.err.log</string>
+</dict>
+</plist>
