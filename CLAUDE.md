@@ -58,6 +58,15 @@ This is the single most important fact for setting expectations. See
 - A `dry_run` bet validates auth + payload without moving mana — the safest first
   call.
 
+**Sanctioned exception — `equity_options/`.** The fenced package
+`src/quantbots/equity_options/` trades **real listed options** via Alpaca as an
+owner-approved carve-out from the clone-only rule. It **must not import `manifold/`**
+(enforced by `tests/test_eo_safety.py`), is never wired into `runner.py`/`cli.py`/the
+strategy registry/`daily_cycle.sh`, and has its own `eo` CLI + DB + ops loop. Execution
+is staged **dry → paper → gated-live**; `execution/live.py` is a refusing stub (paper
+is the ceiling). See `src/quantbots/equity_options/SAFETY.md`. The carve-out applies to
+that package only — the clone-only rule still holds everywhere else.
+
 ## Local compute only (for LLM strategies)
 
 LLM strategies must use **locally-running models** (Ollama / llama.cpp / vLLM /
@@ -65,6 +74,13 @@ LiteLLM proxy → local) — no hosted inference APIs (OpenAI/Anthropic/Gemini c
 until bots are demonstrably profitable. The `llm/` client speaks the
 OpenAI-compatible protocol but points at a **local** endpoint. Flag anything that
 would require hosted inference.
+
+**Sanctioned exception — `mercury_ensemble`.** This one strategy intentionally
+uses hosted inference (Mercury / Inception Labs) as an owner-approved experiment
+to evaluate it as a forecasting engine. It is engine-agnostic and reverts to the
+local model if it does not beat the local `llm` baseline. See
+`docs/mercury-ensemble-calibration.md` §0. The carve-out applies to that strategy
+only — the local-only rule still holds for every other LLM strategy.
 
 ## Secrets
 

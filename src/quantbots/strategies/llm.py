@@ -21,16 +21,12 @@ import logging
 import re
 
 from ._model import norm_cdf
+from ._mixture import PERCENTILE_KEYS, fit_normal
 from ..llm.client import LocalLLM
 from .base import Market, Strategy
 from .ladder import attach_ladder_fields, measurable_key
 
 logger = logging.getLogger(__name__)
-
-_KEYS = ["p10", "p25", "p50", "p75", "p90"]
-# z-scores of the 10/90 and 25/75 percentile pairs of a standard normal.
-_Z_10_90 = 2.5631  # p90 - p10 span in sigmas
-_Z_25_75 = 1.3490  # p75 - p25 span in sigmas (IQR)
 
 _SYSTEM = (
     "You are a calibrated forecaster. Given a quantity to predict, return ONLY a "
@@ -113,7 +109,7 @@ class LLMStrategy(Strategy):
         # Cap the number of LLM calls per run (one call per group).
         return list(groups.values())[: self.max_groups]
 
-    def _ask_percentiles(self, group: list[Market]) -> dict | None:
+    def _ask_percentiles(self, group: list[Market], temperature: float = 0.0) -> dict | None:
         subject = measurable_key(group[0])
         prompt = (
             f"Predict the distribution of: {subject}.\n"
@@ -131,14 +127,14 @@ class LLMStrategy(Strategy):
         if self.no_think:
             prompt += "\n/no_think"  # qwen3: skip chain-of-thought for speed
         try:
-            raw = self.llm.json_completion(system=_SYSTEM, user=prompt)
+            raw = self.llm.json_completion(system=_SYSTEM, user=prompt, temperature=temperature)
         except Exception as e:  # noqa: BLE001 - LLM timeout/error on one ladder must
             # not crash the whole run; abstain on this ladder and move on.
             logger.warning("llm: ladder %r failed (%s) — abstaining", subject[:60], type(e).__name__)
             return None
         try:
             pct = json.loads(raw)
-            if all(k in pct for k in _KEYS):
+            if all(k in pct for k in PERCENTILE_KEYS):
                 return pct
         except (json.JSONDecodeError, TypeError):
             pass
@@ -148,13 +144,7 @@ class LLMStrategy(Strategy):
         pct = self._ask_percentiles(group)
         if pct is None:
             return {}
-        p10, p25, p50, p75, p90 = sorted(float(pct[k]) for k in _KEYS)
-        # Fit a normal: mu = median; sigma from both the 10-90 span and the IQR
-        # (averaged for robustness), then inflated by spread_mult to counter the
-        # model's overconfidence.
-        mu = p50
-        sigma_raw = 0.5 * ((p90 - p10) / _Z_10_90 + (p75 - p25) / _Z_25_75)
-        sigma = max(sigma_raw, 1e-9) * self.spread_mult
+        mu, sigma = fit_normal(pct, self.spread_mult)
 
         # Scale-sanity backstop: if the model answered on a wildly different order of
         # magnitude than the ladder's strikes (a unit/scale mistake), the CDF would

@@ -22,9 +22,13 @@ realtime = ["websockets>=12.0"]
 dashboard = ["flask>=3.0"]
 # Pairs research / correlation analysis (`scripts/research_pairs.py`).
 research = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.2", "matplotlib>=3.9", "yfinance>=0.2"]
+# REAL listed-options bot (fenced equity_options/ package). Trades via Alpaca.
+# Uses plain `requests` for the broker (no SDK) to match the repo's thin-client style.
+equity_options = ["numpy>=1.26", "scipy>=1.11", "pandas>=2.2", "yfinance>=0.2", "requests>=2.31", "typer>=0.12"]
 
 [project.scripts]
 quantbots = "quantbots.cli:app"
+eo = "quantbots.equity_options.cli:app"
 
 [dependency-groups]
 dev = [

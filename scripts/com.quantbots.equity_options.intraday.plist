@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: CONTINUOUS intraday loop for equity_options. Runs all day, idling when
+  the market is closed; manages/hedges/exits + opens gate-passing positions every
+  EO_INTERVAL seconds. REAL options on Alpaca PAPER. See equity_options/SAFETY.md.
+
+  This is COMPLEMENTARY to com.quantbots.equity_options (the daily 10:00 cycle that
+  refreshes the backtest gate + snapshot). Run both, or disable the daily `trade` step
+  if you prefer entries to happen only via this intraday loop.
+
+  Install:
+    cp scripts/com.quantbots.equity_options.intraday.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.quantbots.equity_options.intraday.plist
+  Stop:
+    launchctl unload ~/Library/LaunchAgents/com.quantbots.equity_options.intraday.plist
+  Logs: data/equity_options.intraday.{out,err}.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.quantbots.equity_options.intraday</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mikhail/Bots/scripts/equity_options_monitor.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/mikhail/Bots</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>EO_PAPER</key>
+        <string>1</string>
+        <key>EO_INTERVAL</key>
+        <string>300</string>
+    </dict>
+    <!-- Run continuously; restart if it ever exits. The loop self-idles when closed. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/mikhail/Bots/data/equity_options.intraday.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mikhail/Bots/data/equity_options.intraday.err.log</string>
+</dict>
+</plist>

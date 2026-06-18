@@ -36,6 +36,7 @@ _REGISTRY: dict[str, str] = {
     "cocoa_stocks": "quantbots.strategies.cocoa_stocks:CocoaStocksStrategy",
     "pair_trading": "quantbots.strategies.pair_trading:PairTradingStrategy",
     "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
+    "semantic_arb": "quantbots.strategies.semantic_arb:SemanticArbStrategy",
     "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",
     "stockpile_facts": "quantbots.strategies.stockpile_facts:StockpileFactsStrategy",
     "stockpile_grid_arb": "quantbots.strategies.stockpile_grid_arb:StockpileGridArbStrategy",
@@ -43,6 +44,8 @@ _REGISTRY: dict[str, str] = {
     "market_maker": "quantbots.strategies.market_maker:MarketMakerStrategy",
     "news_drift": "quantbots.strategies.news_drift:NewsDriftStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
+    # Hosted-inference exception (see docs/mercury-ensemble-calibration.md).
+    "mercury_ensemble": "quantbots.strategies.mercury_ensemble:MercuryEnsembleStrategy",
 }
 
 

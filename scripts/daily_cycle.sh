@@ -26,7 +26,7 @@ BOTS=("diffusion_mc_1" "ladder_arb_1" "term_structure_1" \
       "cotton_fundamental_1" "cftc_softs_1" "weather_cocoa_1" "nass_cotton_1" \
       "cocoa_fundamental_1" "coffee_consumption_1" "fas_balance_1" "wasde_cotton_1" \
       "surface_arb_1" "ensemble_1" "commodity_1" "enso_1" "mean_reverter" "llm_forecaster" \
-      "news_drift_1")
+      "news_drift_1" "mercury_ensemble_1")
 
 # Retired bots that still hold OPEN positions: RESOLVE-ONLY (never traded), so their legacy
 # book keeps realizing PnL / syncing resolutions after being pulled from BOTS. Removing a bot

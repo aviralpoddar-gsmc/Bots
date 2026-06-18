@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from .sizing import DEFAULT_LIMITS, compute_trade
 from .strategies.base import Strategy
+from .strategies.ladder import attach_ladder_fields
 
 _YEAR_MS = 365.25 * 24 * 3600 * 1000
 
@@ -119,14 +120,14 @@ def backtest(
         strategy.bind(FakeObs({entity: current}))
         for frac in threshold_fracs:
             threshold = round(current * frac, 4)
-            market = {
+            market = attach_ladder_fields({
                 "id": f"{i}:{frac}",
                 "question": question_template.format(T=threshold),
                 "probability": 0.5,
                 "closeTime": close_time,
                 "totalLiquidity": liquidity,
                 "isResolved": False,
-            }
+            })
             est = strategy.estimate([market]).get(market["id"])
             if est is None:
                 continue
