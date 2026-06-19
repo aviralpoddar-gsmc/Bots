@@ -76,6 +76,7 @@ manage:
   stop_loss_frac: 0.60       # cut at 60% of premium-at-risk lost
   min_hold_dte: 10           # close inside 10 days to expiry regardless
   assignment_dte: 21         # if the short leg is ITM within this DTE, close (assignment guard)
+  breakeven_close: true      # wind down legacy/non-validated positions the moment they're green (uPnL>=0)
 
 # Backtest validation gate. `eo trade` only OPENS a name whose walk-forward backtest
 # cleared this bar within max_age_days (refreshed by `eo backtest`). Set required:false
