@@ -39,6 +39,11 @@ underlyings:
 # Forecast channel toggles. v1 = deterministic commodity-beta + diffusion only.
 forecast:
   mode: momentum            # directional signal: commodity TSMOM -> bull/bear spread (validated). drift_neutral disables.
+  # TSMOM construction (A/B-validated 2026-06-19, scripts/momentum_ab.py): blending 3/6/12-month
+  # horizons + a trend-quality regime filter (abstain when |trend|/vol < min_strength) beat the
+  # single-12m baseline — gate passes 2->3 (added VLO), and AEM/NEM improved on Sharpe+PnL+Brier.
+  momentum_lookbacks: [63, 126, 252]   # 3/6/12-month blend (trading days)
+  momentum_min_strength: 0.4           # require trend >= 0.4 annualized vols, else abstain (skip chop)
   llm_enabled: false        # local-LLM mixture channel (off; requires local model per CLAUDE.md)
   tal_enabled: false        # tal measurables channel (off; auth-blocked seam)
   diffusion:
