@@ -51,8 +51,10 @@ def test_max_profit_and_fractions():
 
 
 def test_exit_profit_target():
+    # profit-target applies to a KEPT (momentum-sleeve) position we ride to its target;
+    # non-kept green positions wind down at break-even before reaching the target.
     s = _gdx_vertical(long_upl=1500.0)
-    d = exit_decisions([s], rules=DEFAULT_MANAGE_RULES)
+    d = exit_decisions([s], rules=DEFAULT_MANAGE_RULES, keep={"GDX"})
     assert d and "profit target" in d[0].reason
 
 
@@ -69,8 +71,23 @@ def test_exit_dte_guard():
 
 
 def test_exit_none_when_midrange():
-    s = _gdx_vertical(long_upl=200.0)   # small profit, far expiry
-    assert exit_decisions([s], rules=DEFAULT_MANAGE_RULES) == []
+    # small profit, far expiry: NOT closed when breakeven_close is off
+    s = _gdx_vertical(long_upl=200.0)
+    rules = {**DEFAULT_MANAGE_RULES, "breakeven_close": False}
+    assert exit_decisions([s], rules=rules) == []
+
+
+def test_legacy_winddown_at_breakeven():
+    # A green legacy position (not in `keep`) winds down at break-even...
+    s = _gdx_vertical(long_upl=50.0)    # uPnL > 0
+    d = exit_decisions([s], rules=DEFAULT_MANAGE_RULES, keep=set())
+    assert d and "break-even" in d[0].reason
+    # ...but a kept (momentum-sleeve) green position is RIDDEN, not closed.
+    d2 = exit_decisions([s], rules=DEFAULT_MANAGE_RULES, keep={"GDX"})
+    assert d2 == []
+    # a losing legacy position is NOT force-closed (held to recover / stop rule)
+    s_loss = _gdx_vertical(long_upl=-100.0)
+    assert exit_decisions([s_loss], rules=DEFAULT_MANAGE_RULES, keep=set()) == []
 
 
 def test_assignment_guard():

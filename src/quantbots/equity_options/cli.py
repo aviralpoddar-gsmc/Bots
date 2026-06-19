@@ -288,7 +288,15 @@ def manage(paper: bool = typer.Option(False), config: str = typer.Option(None)):
         console.print("No open option positions.")
         return
     spots = {s.underlying: (und_src.spot(s.underlying) or 0.0) for s in structures}
-    decisions = exit_decisions(structures, rules=cfg.manage, spots=spots)
+    # The momentum sleeve to RIDE = gate-passing names held as a bullish (call) structure;
+    # everything else is legacy and gets wound down at break-even (Path 1 maintenance).
+    from .backtest import passing_tickers
+    passing = passing_tickers(max_age_days=cfg.gate["max_age_days"])
+    keep = {s.underlying for s in structures
+            if s.underlying in passing and {l.kind for l in s.legs} == {"call"}}
+    if keep:
+        console.print(f"[dim]riding momentum sleeve: {', '.join(sorted(keep))}[/dim]")
+    decisions = exit_decisions(structures, rules=cfg.manage, spots=spots, keep=keep)
     if not decisions:
         console.print(f"[dim]{len(structures)} open positions; none meet an exit rule.[/dim]")
         return

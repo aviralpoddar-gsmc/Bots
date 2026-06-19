@@ -39,9 +39,17 @@ class ExitDecision:
 
 
 def exit_decisions(structures: list[StructurePosition], *, rules: dict,
-                   spots: dict[str, float] | None = None) -> list[ExitDecision]:
-    """Decide which open structures to close now and why."""
+                   spots: dict[str, float] | None = None,
+                   keep: set[str] | None = None) -> list[ExitDecision]:
+    """Decide which open structures to close now and why.
+
+    `keep` = underlyings to RIDE (the validated momentum sleeve); everything else is a
+    legacy/non-validated position. When `rules["breakeven_close"]` is set, those legacy
+    positions are wound down the moment they are no longer at a loss (uPnL >= 0) — the
+    "close on green/break-even" policy — instead of waiting for the full profit target.
+    """
     spots = spots or {}
+    keep = keep or set()
     out: list[ExitDecision] = []
     for s in structures:
         if s.contracts <= 0:
@@ -52,6 +60,11 @@ def exit_decisions(structures: list[StructurePosition], *, rules: dict,
             continue
         if (spot is not None and s.dte <= rules["assignment_dte"] and s.short_itm(spot)):
             out.append(ExitDecision(s, f"short-leg ITM, {s.dte}d to expiry (assignment guard)"))
+            continue
+        # Legacy wind-down: close non-validated positions as soon as they're green/flat.
+        if (rules.get("breakeven_close") and s.underlying not in keep
+                and s.unrealized_pl >= 0):
+            out.append(ExitDecision(s, f"legacy wind-down at break-even (uPnL {s.unrealized_pl:+.0f})"))
             continue
         if s.profit_fraction() >= rules["profit_target_frac"]:
             out.append(ExitDecision(s, f"profit target {s.profit_fraction():.0%} of max"))

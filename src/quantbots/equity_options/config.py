@@ -78,6 +78,7 @@ DEFAULT_MANAGE_RULES: dict[str, Any] = {
     "stop_loss_frac": 0.60,       # cut at 60% of premium lost
     "min_hold_dte": 10,           # close inside 10 DTE regardless
     "assignment_dte": 21,         # short-leg-ITM assignment guard within this DTE
+    "breakeven_close": True,      # wind down legacy/non-validated positions once green (uPnL>=0)
 }
 
 
