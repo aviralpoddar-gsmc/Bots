@@ -52,7 +52,11 @@ def candidates_for(u: Underlying, chain: list[dict], cfg: EquityOptionsConfig, *
     mu_view = 0.0
     if mode == "momentum":
         from .forecast.direction import momentum_drift
-        mu_view, _ = momentum_drift(commodity=u.commodity, beta_c=beta.beta_c)
+        lbs = fcast.get("momentum_lookbacks")
+        mu_view, _ = momentum_drift(
+            commodity=u.commodity, beta_c=beta.beta_c,
+            lookbacks=tuple(lbs) if lbs else None,
+            min_strength=float(fcast.get("momentum_min_strength", 0.0)))
     fmode = "directional" if (mode == "momentum" and mu_view != 0.0) else "drift_neutral"
     cache: dict[float, Forecast | None] = {}
 

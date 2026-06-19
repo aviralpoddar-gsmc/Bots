@@ -37,3 +37,29 @@ def test_momentum_drift_propagates_via_beta(monkeypatch):
 def test_momentum_drift_zero_when_flat(monkeypatch):
     monkeypatch.setattr(dr, "commodity_momentum", lambda *a, **k: 0.0)
     assert dr.momentum_drift(commodity="COPPER", beta_c=1.0) == (0.0, 0.0)
+
+
+def test_momentum_multi_lookback_blends(monkeypatch):
+    # With `lookbacks`, the trend is the mean across the requested horizons.
+    seen = {}
+    def fake(commodity, *, as_of=None, lookback_days=252, **k):
+        seen[lookback_days] = {63: 0.30, 126: 0.20, 252: 0.10}[lookback_days]
+        return seen[lookback_days]
+    monkeypatch.setattr(dr, "commodity_momentum", fake)
+    mu, _ = dr.momentum_drift(commodity="GOLD", beta_c=1.0, shrink=1.0, drift_cap=1.0,
+                              lookbacks=(63, 126, 252))
+    assert set(seen) == {63, 126, 252}          # all horizons consulted
+    assert abs(mu - 0.20) < 1e-9                  # mean(0.30, 0.20, 0.10) = 0.20
+
+
+def test_momentum_strength_filter_abstains_in_chop(monkeypatch):
+    # Trend present but small relative to vol -> below min_strength -> abstain.
+    monkeypatch.setattr(dr, "commodity_momentum", lambda *a, **k: 0.05)   # +5%/yr
+    monkeypatch.setattr(dr, "commodity_ann_vol", lambda *a, **k: 0.40)    # 40%/yr vol
+    # strength = 0.05/0.40 = 0.125 < 0.4 -> (0,0)
+    assert dr.momentum_drift(commodity="COPPER", beta_c=1.0, min_strength=0.4) == (0.0, 0.0)
+    # A clean strong trend (strength = 0.30/0.20 = 1.5 >= 0.4) is NOT filtered.
+    monkeypatch.setattr(dr, "commodity_momentum", lambda *a, **k: 0.30)
+    monkeypatch.setattr(dr, "commodity_ann_vol", lambda *a, **k: 0.20)
+    mu, _ = dr.momentum_drift(commodity="GOLD", beta_c=1.0, min_strength=0.4)
+    assert mu > 0.0

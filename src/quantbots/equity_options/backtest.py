@@ -305,7 +305,11 @@ def run_backtest(cfg, underlying: str, *, as_of_dates: list[date], horizon_days:
                             lookback_days=u.beta_lookback_days, as_of=as_of)
             if beta is None or beta.weak:
                 continue
-            mu_view, conv = momentum_drift(commodity=u.commodity, beta_c=beta.beta_c, as_of=as_of)
+            _lbs = cfg.forecast.get("momentum_lookbacks")
+            mu_view, conv = momentum_drift(
+                commodity=u.commodity, beta_c=beta.beta_c, as_of=as_of,
+                lookbacks=tuple(_lbs) if _lbs else None,
+                min_strength=float(cfg.forecast.get("momentum_min_strength", 0.0)))
             fmode = "directional" if mu_view != 0.0 else "drift_neutral"
             if mu_view != 0.0:
                 res.signal_folds += 1
