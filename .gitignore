@@ -32,3 +32,8 @@ data/equity_options_gate.json
 # equity_options derived data (regenerable): tal Snowflake cache + research artifacts.
 data/tal/
 data/metal_correlation_matrix.*
+
+# tal consensus snapshot log (accumulating; durable history also lives in tal Snowflake)
+data/tal_consensus_log.csv
+data/tal_validate_log.csv
+data/factors/

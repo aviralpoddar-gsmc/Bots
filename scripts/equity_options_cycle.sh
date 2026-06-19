@@ -48,6 +48,10 @@ $EO backtest || log "backtest gate refresh failed (continuing; trade will gate-b
 log "6. open new structures (only gate-PASSing, non-held names)"
 $EO trade $PAPER_FLAG || log "trade failed (continuing)"
 
+log "7b. tal consensus snapshot (accrue history for signal validation)"
+$EO tal-snapshot || log "tal-snapshot failed (continuing)"
+$EO tal-validate --log || log "tal-validate failed (continuing)"
+
 log "8. snapshot"
 $EO snapshot || log "snapshot failed (continuing)"
 

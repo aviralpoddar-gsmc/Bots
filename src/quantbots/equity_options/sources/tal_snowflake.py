@@ -141,6 +141,71 @@ def question_timeseries(question_ids: list[int], *, max_age_hours: float = 12.0)
     return df
 
 
+def active_markets(*, min_bettors: int = 10, max_age_hours: float = 6.0):
+    """Actively-traded (multi-agent) price markets: the informative crowd consensus.
+
+    Filters to markets with >= min_bettors unique bettors and a USD price unit — these
+    have real trading, so their LATEST_MARKET_PROBABILITY is a meaningful prediction (vs
+    the stale 0.50/1.0 untraded markets). Returns DataFrame with prob/threshold/direction/
+    bettors/volume/settlement + the market question (for metal classification)."""
+    import pandas as pd
+    path, age = _cache(f"active_mkts_{min_bettors}", max_age_hours)
+    if _fresh(path, age):
+        return pd.read_pickle(path)
+    rows = query(
+        "select MARKET_QUESTION, THRESHOLD, THRESHOLD_UNIT, THRESHOLD_DIRECTION, "
+        "LATEST_MARKET_PROBABILITY, UNIQUE_BETTOR_COUNT, MANIFOLD_VOLUME, SETTLEMENT_DATE "
+        "from MARKET.PREDICTION_MARKET "
+        f"where UNIQUE_BETTOR_COUNT >= {int(min_bettors)} and LATEST_MARKET_PROBABILITY is not null "
+        "and THRESHOLD_UNIT ilike 'USD%' and THRESHOLD_DIRECTION = 'exceeds'")
+    df = pd.DataFrame(rows)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_pickle(path)
+    return df
+
+
+_MATERIAL_CASE = """
+  case when MARKET_QUESTION ilike '%gold%' then 'GOLD'
+       when MARKET_QUESTION ilike '%silver%' then 'SILVER'
+       when MARKET_QUESTION ilike '%platinum%' then 'PLATINUM'
+       when MARKET_QUESTION ilike '%palladium%' then 'PALLADIUM'
+       when MARKET_QUESTION ilike '%copper%' then 'COPPER'
+       when MARKET_QUESTION ilike '%brent%' then 'BRENT'
+       when MARKET_QUESTION ilike '%wti%' or MARKET_QUESTION ilike '%crude%' then 'WTI'
+       when MARKET_QUESTION ilike '%natural gas%' or MARKET_QUESTION ilike '%henry hub%' then 'NATGAS'
+  end"""
+
+
+def daily_material_consensus(*, min_bettors: int = 10, max_age_hours: float = 6.0):
+    """Daily avg consensus probability per material over the available history window.
+
+    Price-level markets only (excludes treatment-charge/premium/spread/margin/basis), so
+    the day-over-day CHANGE is a clean directional revision (threshold placement cancels).
+    Returns DataFrame(material, day, avg_prob, n_markets). ~8 materials x ~80 days.
+    """
+    import pandas as pd
+    path, age = _cache(f"daily_consensus_{min_bettors}", max_age_hours)
+    if _fresh(path, age):
+        return pd.read_pickle(path)
+    rows = query(f"""
+      select {_MATERIAL_CASE} as material, to_char(date_trunc('day', h.DATE_RECORDED),'YYYY-MM-DD') as day,
+             avg(h.PROBABILITY) as avg_prob, count(distinct h.MARKET_ID) as n_markets
+      from MARKET.MARKET_PRICE_HISTORY h join MARKET.PREDICTION_MARKET pm on pm.ID = h.MARKET_ID
+      where pm.UNIQUE_BETTOR_COUNT >= {int(min_bettors)} and pm.THRESHOLD_UNIT ilike 'USD%'
+        and pm.THRESHOLD_DIRECTION = 'exceeds'
+        and pm.MARKET_QUESTION not ilike '%treatment%' and pm.MARKET_QUESTION not ilike '%premium%'
+        and pm.MARKET_QUESTION not ilike '%spread%' and pm.MARKET_QUESTION not ilike '%margin%'
+        and pm.MARKET_QUESTION not ilike '%discount%' and pm.MARKET_QUESTION not ilike '%basis%'
+        and pm.MARKET_QUESTION not ilike '%ratio%'
+      group by 1, 2 having material is not null order by 1, 2""")
+    df = pd.DataFrame(rows)
+    if len(df):
+        df.columns = [c.lower() for c in df.columns]  # Snowflake returns UPPERCASE
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_pickle(path)
+    return df
+
+
 def find_questions(like: str, *, limit: int = 50) -> list[dict]:
     """Search measurable questions by SLUG/JSON_ID/text (ILIKE). Not cached (ad-hoc)."""
     safe = like.replace("'", "''")

@@ -477,6 +477,178 @@ def screen(period: str = typer.Option("5y"), max_lag: int = typer.Option(5),
                       f"{cfg_mod.DISCOVERED_UNIVERSE} (now drives the universe).")
 
 
+@app.command(name="tal-signals")
+def tal_signals(min_bettors: int = typer.Option(10, help="min unique bettors = multi-agent"),
+                min_tilt: float = typer.Option(0.05), min_conf: float = typer.Option(0.15)):
+    """Multi-agent tal consensus → tradeable directional spread candidates on equities."""
+    from .research.metal_matrix import build_matrix
+    from .research.tal_signals import material_consensus, spread_candidates
+    from .sources import tal_snowflake as tal
+
+    mkts = tal.active_markets(min_bettors=min_bettors)
+    console.print(f"[dim]{len(mkts)} actively-traded (≥{min_bettors} bettor) price markets[/dim]")
+    cons = material_consensus(mkts)
+    t1 = Table(title="Multi-agent consensus by material")
+    for c in ("material", "tilt", "dir", "markets", "bettors", "conf"):
+        t1.add_column(c)
+    for kw, mc in sorted(cons.items(), key=lambda x: -abs(x[1].tilt)):
+        d = "[green]BULL[/green]" if mc.tilt > 0 else "[red]BEAR[/red]"
+        t1.add_row(kw, f"{mc.tilt:+.2f}", d, str(mc.n_markets), str(mc.total_bettors), f"{mc.confidence:.2f}")
+    console.print(t1)
+
+    try:
+        corr = build_matrix()
+    except Exception:  # noqa: BLE001
+        corr = None
+    cands = spread_candidates(cons, corr_matrix=corr, min_tilt=min_tilt, min_confidence=min_conf)
+    t2 = Table(title="Tradeable spread candidates (need gate before live)")
+    for c in ("equity", "material", "spread", "tilt", "conf", "corr", "conviction"):
+        t2.add_column(c)
+    for s in cands[:25]:
+        spread = "bull_call_spread" if s.direction == "bull" else "bear_put_spread"
+        color = "green" if s.direction == "bull" else "red"
+        t2.add_row(s.equity, s.material, f"[{color}]{spread}[/{color}]", f"{s.consensus_tilt:+.2f}",
+                   f"{s.confidence:.2f}", f"{s.correlation:+.2f}" if s.correlation is not None else "-",
+                   f"{s.conviction:.3f}")
+    console.print(t2)
+    console.print(f"[dim]{len(cands)} candidates. These are signals, not validated edge — "
+                  f"run a backtest gate before trading.[/dim]")
+
+
+@app.command(name="factor-validate")
+def factor_validate(h: int = typer.Option(21, help="forward horizon (days)"),
+                    period: str = typer.Option("12y", help="history window")):
+    """Validate macro/factor timing signals (real-rate, dollar; carry/positioning from CSV)
+    over long history — IC + t-stat + correlation to momentum. Reproduces the research."""
+    from .research import factors as F
+    from .research.factor_validate import validate_signal
+
+    console.print("[bold]available factors:[/bold]")
+    for k, v in F.available_factors().items():
+        console.print(f"  {k}: {v}")
+    table = Table(title=f"Factor validation (h={h}d, {period}) — signal predicts forward basket return")
+    for c in ("factor", "basket", "IC", "IC_t", "timing_Sharpe", "timing_t", "hit%", "corr_mom", "n"):
+        table.add_column(c)
+    runs = [
+        ("real_rate", F.real_rate_signal(), F.PRECIOUS, "GC=F"),
+        ("dollar", F.dollar_signal(), F.PRECIOUS + F.INDUSTRIAL, "GC=F"),
+    ]
+    for name, sig, basket, mom in runs:
+        try:
+            r = validate_signal(sig, basket, period=period, h=h, momentum_proxy=mom)
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[red]{name} failed: {e}[/red]"); continue
+        if not r:
+            continue
+        ok = abs(r.ic_t) > 2 and abs(r.corr_to_momentum) < 0.5
+        mark = "[green]✓[/green]" if ok else "[yellow]~[/yellow]"
+        table.add_row(f"{name} {mark}", basket[0] + "..", f"{r.ic:+.3f}", f"{r.ic_t:+.2f}",
+                      f"{r.timing_sharpe:+.2f}", f"{r.timing_t:+.2f}", f"{r.hit:.0%}",
+                      f"{r.corr_to_momentum:+.2f}", str(r.n_days))
+    console.print(table)
+    # carry / positioning (cross-sectional) from the point-in-time CSVs, if present
+    from .research.factor_validate import validate_csv_factor
+    ct = Table(title="CSV factors — cross-sectional (carry / positioning)")
+    for c in ("factor", "IC", "IC_t", "factor_Sharpe", "factor_t", "hit%", "obs"):
+        ct.add_column(c)
+    any_csv = False
+    for name, panel in (("carry", F.carry_from_csv()), ("positioning", F.positioning_from_csv())):
+        if panel is None:
+            continue
+        any_csv = True
+        r = validate_csv_factor(panel, h=h)
+        if r is None:
+            ct.add_row(name, "—", "—", "—", "—", "—", f"{len(panel)}d (insufficient)")
+        else:
+            ct.add_row(name, f"{r.mean_ic:+.3f}", f"{r.ic_t:+.2f}", f"{r.factor_sharpe_ann:+.2f}",
+                       f"{r.factor_t:+.2f}", f"{r.factor_hit:.0%}", str(r.n_days))
+    if any_csv:
+        console.print(ct)
+    console.print("[dim]✓ = |IC t|>2 AND |corr to momentum|<0.5 (a real, additive signal). "
+                  "carry/positioning need MULTI-YEAR history to produce real t-stats.[/dim]")
+
+
+@app.command(name="tal-snapshot")
+def tal_snapshot():
+    """Append today's per-material consensus to data/tal_consensus_log.csv (run daily to
+    accrue the history needed to gate the signal later)."""
+    import csv
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from .research.tal_signals import material_consensus
+    from .sources import tal_snowflake as tal
+
+    cons = material_consensus(tal.active_markets(min_bettors=10))
+    if not cons:
+        console.print("[yellow]no consensus to log[/yellow]"); return
+    day = datetime.now(UTC).date().isoformat()
+    path = Path("data/tal_consensus_log.csv")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists()
+    with path.open("a", newline="") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["day", "material", "tilt", "n_markets", "total_bettors", "total_volume"])
+        for kw, mc in cons.items():
+            w.writerow([day, kw, f"{mc.tilt:.4f}", mc.n_markets, mc.total_bettors, f"{mc.total_volume:.0f}"])
+    console.print(f"[green]logged[/green] {len(cons)} materials for {day} -> {path}")
+
+
+@app.command(name="tal-validate")
+def tal_validate(h: int = typer.Option(5, help="forward horizon (days) = rebalance period"),
+                 chg: int = typer.Option(5, help="consensus-change lookback (days)"),
+                 log: bool = typer.Option(False, help="append a result row to data/tal_validate_log.csv")):
+    """Validate the consensus signal on available history (cross-sectional IC + long-short
+    factor). Preliminary small-sample read, NOT the multi-year gate. With --log, append a
+    dated row so significance can be tracked as history accrues."""
+    from .research.tal_validate import validate
+    from .sources import tal_snowflake as tal
+
+    df = tal.daily_material_consensus(min_bettors=10)
+    days = df["day"].nunique() if len(df) else 0
+    mats = df["material"].nunique() if len(df) else 0
+    console.print(f"[dim]history: {mats} materials x {days} days[/dim]")
+    res = validate(df, h=h, chg_days=chg)
+    if not res:
+        console.print("[red]insufficient history to validate.[/red]"); return
+    if log:
+        import csv
+        from datetime import UTC, datetime
+        from pathlib import Path
+        path = Path("data/tal_validate_log.csv")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        new = not path.exists()
+        with path.open("a", newline="") as f:
+            w = csv.writer(f)
+            if new:
+                w.writerow(["day", "hist_days", "signal", "mean_ic", "ic_t", "factor_sharpe",
+                            "factor_t", "hit", "periods", "passes"])
+            for name in ("change", "level"):
+                r = res.get(name)
+                if r:
+                    w.writerow([datetime.now(UTC).date().isoformat(), days, name,
+                                f"{r.mean_ic:.4f}", f"{r.ic_t:.2f}", f"{r.factor_sharpe_ann:.2f}",
+                                f"{r.factor_t:.2f}", f"{r.factor_hit:.2f}", r.n_periods,
+                                int(r.mean_ic > 0 and r.ic_t > 2 and r.factor_t > 1.5)])
+        console.print(f"[dim]appended -> {path}[/dim]")
+    table = Table(title=f"tal-consensus validation (h={h}d, ~{days}d history — preliminary)")
+    for c in ("signal", "mean_IC", "IC_t", "factor_Sharpe", "factor_t", "hit%", "periods"):
+        table.add_column(c)
+    for name in ("change", "level"):
+        r = res.get(name)
+        if not r:
+            continue
+        ok = r.mean_ic > 0 and r.ic_t > 2 and r.factor_t > 1.5
+        mark = "[green]✓[/green]" if ok else "[red]✗[/red]"
+        table.add_row(f"{name} {mark}", f"{r.mean_ic:+.3f}", f"{r.ic_t:+.2f}",
+                      f"{r.factor_sharpe_ann:+.2f}", f"{r.factor_t:+.2f}",
+                      f"{r.factor_hit:.0%}", str(r.n_periods))
+    console.print(table)
+    console.print("[dim]✓ = positive IC with t>2 AND factor t>1.5 (suggestive on ~4mo; "
+                  "real gate needs the logged history to accrue).[/dim]")
+
+
 @app.command(name="metals-matrix")
 def metals_matrix(min_corr: float = typer.Option(0.2, help="hide |corr| below this"),
                   period: str = typer.Option("3y"), top: int = typer.Option(15),
