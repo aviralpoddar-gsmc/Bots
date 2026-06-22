@@ -153,7 +153,7 @@ class LLMStrategy(Strategy):
         strikes = [m["threshold"] for m in group if m.get("threshold") is not None]
         if strikes:
             smid = sorted(strikes)[len(strikes) // 2]
-            center = abs(mu) if abs(mu) > 1e-9 else max(abs(p90 - p10), 1e-9)
+            center = abs(mu) if abs(mu) > 1e-9 else max(sigma, 1e-9)
             ratio = smid / center if center > 0 else float("inf")
             if ratio > 20 or ratio < 0.05:
                 logger.warning("llm: scale mismatch on %r (strikes~%.3g vs model~%.3g) — abstaining",
