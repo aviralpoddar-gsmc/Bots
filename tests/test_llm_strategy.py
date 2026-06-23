@@ -73,6 +73,20 @@ def test_conf_cap_clamps_both_sides():
     assert est == 0.25  # 1 - cap
 
 
+def test_null_percentile_abstains_not_crashes():
+    # A flaky model can return a null/non-numeric percentile. The bot must abstain
+    # on that ladder (empty estimate), NOT crash fit_normal with float(None).
+    s = _strat({"p10": 60, "p25": None, "p50": 70, "p75": 75, "p90": 80}, spread_mult=1.0)
+    m = {"id": "a", "question": "Will X exceed 70?", "threshold": 70, "direction": "exceeds"}
+    assert s.estimate([m]) == {}
+
+
+def test_nonnumeric_percentile_abstains():
+    s = _strat({"p10": 60, "p25": 65, "p50": "n/a", "p75": 75, "p90": 80}, spread_mult=1.0)
+    m = {"id": "a", "question": "Will X exceed 70?", "threshold": 70, "direction": "exceeds"}
+    assert s.estimate([m]) == {}
+
+
 def test_max_groups_caps_calls():
     s = _strat(PCT, max_groups=2)
     subjects = ["gold", "silver", "copper", "cotton", "wheat"]

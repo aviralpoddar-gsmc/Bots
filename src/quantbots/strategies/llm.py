@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 
 from ._model import norm_cdf
@@ -134,9 +135,12 @@ class LLMStrategy(Strategy):
             return None
         try:
             pct = json.loads(raw)
-            if all(k in pct for k in PERCENTILE_KEYS):
+            # Require every percentile to be PRESENT *and* a finite number. A flaky
+            # model can emit a null/non-numeric value (e.g. {"p25": null}); that must
+            # abstain on this ladder, not crash fit_normal (float(None)) downstream.
+            if all(k in pct and math.isfinite(float(pct[k])) for k in PERCENTILE_KEYS):
                 return pct
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
         return None
 
