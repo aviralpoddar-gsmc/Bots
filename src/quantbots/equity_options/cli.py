@@ -352,25 +352,31 @@ def positions(paper: bool = typer.Option(False), config: str = typer.Option(None
 def backtest(underlying: str = typer.Option(None, help="Ticker (default: all enabled)"),
              horizon: int = typer.Option(90, help="Days to target expiry"),
              start: str = typer.Option("2024-03-01", help="First as-of date (>= Alpaca history)"),
-             mode: str = typer.Option("momentum", help="forecast mode: momentum | tal | drift_neutral"),
+             fold_days: int = typer.Option(14, help="Days between walk-forward folds "
+                                           "(14=bi-weekly denser sampling; 30=monthly)"),
+             mode: str = typer.Option(None, help="forecast mode: momentum | tal | "
+                                      "drift_neutral (default: config forecast.mode)"),
              config: str = typer.Option(None)):
     """Walk-forward gate: Brier-skill vs the implied baseline + realized PnL/Sharpe.
 
-    For each monthly as-of date it builds f_P with NO lookahead, reconstructs the
-    historical chain from Alpaca bars, and scores against the realized terminal price.
+    For each as-of date (every `fold_days`) it builds f_P with NO lookahead, reconstructs
+    the historical chain from Alpaca bars, and scores against the realized terminal price.
+    Bi-weekly folds (the default) sample Alpaca's ~2y history finely enough that names
+    with real edge clear the min-trades floor instead of being dropped as insufficient.
     """
     from datetime import date, timedelta
 
     from .backtest import (
         ALPACA_OPTIONS_HISTORY_START,
         load_gate_results,
-        monthly_as_of_dates,
         run_backtest,
         save_gate_results,
+        walk_forward_dates,
     )
 
     cfg = load_config(config) if config else load_config()
     _need_keys(cfg)
+    mode = mode or cfg.forecast.get("mode", "momentum")   # gate mode tracks the live signal
     tickers = ([underlying.upper()] if underlying
                else [u.ticker for u in cfg.enabled_underlyings()])
     gargs = {"min_trades": cfg.gate["min_trades"], "min_brier_skill": cfg.gate["min_brier_skill"],
@@ -382,9 +388,10 @@ def backtest(underlying: str = typer.Option(None, help="Ticker (default: all ena
     start_d = max(date(sy, sm, sd), date(2024, 3, 1))
     today = date.today()
     end_d = today - timedelta(days=horizon + 21)
-    as_of_dates = monthly_as_of_dates(start_d, end_d)
+    as_of_dates = walk_forward_dates(start_d, end_d, step_days=fold_days)
+    cadence = "bi-weekly" if fold_days == 14 else ("monthly" if fold_days == 30 else f"{fold_days}d")
     console.print(f"[dim]Alpaca options history starts {ALPACA_OPTIONS_HISTORY_START}; "
-                  f"{len(as_of_dates)} monthly folds {start_d}..{end_d}, horizon {horizon}d.[/dim]")
+                  f"{len(as_of_dates)} {cadence} folds {start_d}..{end_d}, horizon {horizon}d.[/dim]")
 
     table = Table(title="Backtest gate (Brier-skill>0 AND PnL-Sharpe>0)")
     for col in ("ticker", "folds", "trades", "brier", "brier_skill", "crps",
@@ -416,15 +423,59 @@ def backtest(underlying: str = typer.Option(None, help="Ticker (default: all ena
 
 @app.command()
 def snapshot(config: str = typer.Option(None)):
-    """Write a PnL + greeks snapshot from the local ledger."""
+    """Write a PnL snapshot from BROKER truth (the real scoreboard, not the local ledger).
+
+    Open positions + live marks come from Alpaca; total P&L = account equity − base_value
+    (Alpaca portfolio history); realized = total − unrealized. The local ledger over-logs
+    unfilled submits and never books silent expiries, so it is NOT trusted for $ P&L — only
+    for the closed-trade count. Falls back to a ledger-only snapshot when keys are absent.
+    """
+    from .positions import structures_from_broker
     from .store.db import OptionsStore
 
+    cfg = load_config(config) if config else load_config()
+    structures = acct = None
+    if cfg.alpaca_key and cfg.alpaca_secret:
+        try:
+            from .execution.live import make_broker
+            broker = make_broker(PAPER, key=cfg.alpaca_key, secret=cfg.alpaca_secret)
+            structures = structures_from_broker(broker.positions())
+            acct = broker.account_pnl()
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[yellow]broker unavailable ({e}); ledger-only snapshot[/yellow]")
+
     with OptionsStore() as store:
-        positions = store.open_positions()
-        premium = sum(abs(p["net_cash"]) for p in positions.values())
-        store.write_pnl_snapshot(realized=0.0, unrealized=0.0, premium_at_risk=premium,
-                                 open_positions=len(positions), closed_positions=0)
-    console.print(f"[green]Snapshot written[/green] ({len(positions)} open positions).")
+        if structures is not None:
+            open_syms = {l.symbol for s in structures for l in s.legs}
+            ledger = store.realized_and_open(open_symbols=open_syms)
+            unrealized = sum(s.unrealized_pl for s in structures)
+            premium = sum(abs(s.net_cost) for s in structures)
+            open_count = len(structures)
+            closed_count = ledger["closed_positions"]
+            # Realized from broker truth (total account P&L minus open marks); fall back to
+            # the ledger reconstruction only if portfolio-history base_value is unavailable.
+            if acct and acct.get("total_pnl") is not None:
+                realized = acct["total_pnl"] - unrealized
+                scoreboard = (f"equity {acct['equity']:,.0f}  total P&L {acct['total_pnl']:+,.0f}"
+                              f"  day {acct['equity'] - acct['last_equity']:+,.0f}")
+            else:
+                realized = ledger["realized"]
+                scoreboard = "(ledger realized — no broker base_value)"
+        else:
+            ledger = store.realized_and_open()  # infer open positions from the ledger
+            unrealized = 0.0
+            premium = ledger["open_cost_basis"]
+            open_count = ledger["open_positions"]
+            closed_count = ledger["closed_positions"]
+            realized = ledger["realized"]
+            scoreboard = "(ledger-only — no broker)"
+        store.write_pnl_snapshot(
+            realized=realized, unrealized=unrealized, premium_at_risk=premium,
+            open_positions=open_count, closed_positions=closed_count)
+    console.print(
+        f"[green]Snapshot written[/green] ({open_count} open, {closed_count} closed) "
+        f"realized={realized:+,.0f} unrealized={unrealized:+,.0f} total={realized + unrealized:+,.0f}")
+    console.print(f"[dim]{scoreboard}[/dim]")
 
 
 @app.command(name="cancel-orders")

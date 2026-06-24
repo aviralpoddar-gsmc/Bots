@@ -30,6 +30,17 @@ def test_target_expiry_is_a_third_friday_near_horizon():
     assert abs((e - date(2024, 6, 30)).days) <= 31
 
 
+def test_walk_forward_dates_spacing_and_density():
+    start, end = date(2024, 3, 1), date(2026, 3, 4)
+    bw = bt.walk_forward_dates(start, end, step_days=14)
+    mo = bt.walk_forward_dates(start, end, step_days=30)
+    assert all((b - a).days == 14 for a, b in zip(bw, bw[1:]))   # exact bi-weekly spacing
+    assert len(bw) > len(mo)                                     # denser sampling
+    assert bw[0] == start and bw[-1] <= end
+    # monthly_as_of_dates retained for backward compat
+    assert len(bt.monthly_as_of_dates(start, end)) == len(mo)
+
+
 def test_strike_grid_spans_band():
     g = bt.strike_grid(100.0)
     assert min(g) <= 60 and max(g) >= 140

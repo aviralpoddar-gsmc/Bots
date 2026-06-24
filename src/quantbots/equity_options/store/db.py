@@ -137,7 +137,51 @@ class OptionsStore:
             a["net_cash"] += t["amount"]
             a["underlying"] = t["underlying"]
             a["multiplier"] = t["multiplier"]
-        return {sym: v for sym, v in agg.items() if v["net_contracts"] != 0}
+            if t["status"] == "expired":
+                a["expired"] = True
+        # An expired leg has no closing row, so its net contracts never return to 0.
+        # Treat any symbol with an expired leg as CLOSED (settled), not open.
+        return {sym: v for sym, v in agg.items()
+                if v["net_contracts"] != 0 and not v.get("expired")}
+
+    def realized_and_open(self, open_symbols: set[str] | None = None) -> dict:
+        """Split the filled/expired ledger into REALIZED (closed) vs OPEN cash flows.
+
+        The ledger records every cash flow (`amount`: <0 paid, >0 received). A
+        position is realized once it is no longer held; what remains open carries a
+        cost basis whose mark-to-market is the caller's `unrealized` (broker truth).
+
+        `open_symbols`: OCC symbols the BROKER still holds (authoritative). When given,
+        any ledger leg whose symbol is NOT held counts as realized. When None (no
+        broker available), a symbol is inferred open iff its net signed contracts != 0
+        and none of its legs expired (an expired leg settled, so it is closed).
+
+        Returns {realized, open_cost_basis, open_positions, closed_positions,
+        open_symbols} where realized = closed round-trips + expired-worthless losses.
+        """
+        by_sym: dict[str, dict] = defaultdict(
+            lambda: {"net": 0, "cash": 0.0, "expired": False, "tickets": set()})
+        for t in self.trades():
+            if t["status"] in ("canceled", "rejected", "intended"):
+                continue
+            s = by_sym[t["symbol"]]
+            s["net"] += (1 if t["side"] == "BUY" else -1) * t["qty"]
+            s["cash"] += t["amount"]
+            s["tickets"].add(t["ticket_id"])
+            if t["status"] == "expired":
+                s["expired"] = True
+        if open_symbols is None:
+            open_set = {sym for sym, v in by_sym.items()
+                        if v["net"] != 0 and not v["expired"]}
+        else:
+            open_set = {sym for sym in by_sym if sym in open_symbols}
+        realized = sum(v["cash"] for sym, v in by_sym.items() if sym not in open_set)
+        open_cost = sum(-v["cash"] for sym, v in by_sym.items() if sym in open_set)
+        open_tk = {tk for sym, v in by_sym.items() if sym in open_set for tk in v["tickets"]}
+        closed_tk = {tk for v in by_sym.values() for tk in v["tickets"]} - open_tk
+        return {"realized": realized, "open_cost_basis": open_cost,
+                "open_positions": len(open_tk), "closed_positions": len(closed_tk),
+                "open_symbols": open_set}
 
     # --- snapshots -------------------------------------------------------
 

@@ -370,8 +370,29 @@ def run_backtest(cfg, underlying: str, *, as_of_dates: list[date], horizon_days:
     return res
 
 
+def walk_forward_dates(start: date, end: date, step_days: int = 30) -> list[date]:
+    """Walk-forward as-of folds every `step_days` across [start, end].
+
+    Alpaca options history is only ~2 years, so monthly folds (step_days=30) yield
+    ~25 folds and many names never reach the gate's min-trades floor. A denser step
+    (e.g. 14 = bi-weekly) samples the SAME history more finely, giving a more reliable
+    point estimate of the per-trade Brier-skill / Sharpe for names that would otherwise
+    be discarded as "insufficient data". It does NOT add independent evidence — with a
+    90d horizon, bi-weekly entries overlap ~6x — so the gate's per-trade Sharpe
+    (mean/std, no sqrt-N) is the right metric here: overlap widens its standard error
+    but leaves the gated point value unbiased. Keep min_trades fixed accordingly.
+    """
+    step = max(int(step_days), 1)
+    out: list[date] = []
+    d = start
+    while d <= end:
+        out.append(d)
+        d += timedelta(days=step)
+    return out
+
+
 def monthly_as_of_dates(start: date, end: date) -> list[date]:
-    """First business-ish day of each month in [start, end] — the walk-forward folds."""
+    """First day of each month in [start, end] — monthly walk-forward folds (compat)."""
     out: list[date] = []
     y, m = start.year, start.month
     while date(y, m, 1) <= end:

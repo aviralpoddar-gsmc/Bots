@@ -72,6 +72,21 @@ class AlpacaPaperBroker(BrokerClient):
         acct = self._http.get("/v2/account") or {}
         return float(acct.get("equity", 0.0))
 
+    def account_pnl(self) -> dict:
+        """Broker-truth P&L (the real scoreboard — never the local ledger). Returns
+        current equity, prior-close last_equity, the account base_value (portfolio
+        history origin), and total_pnl = equity - base_value. The caller derives
+        realized = total_pnl - unrealized(open positions)."""
+        acct = self._http.get("/v2/account") or {}
+        equity = float(acct.get("equity", 0.0))
+        last_equity = float(acct.get("last_equity") or 0.0)
+        hist = self._http.get("/v2/account/portfolio/history",
+                              {"period": "all", "timeframe": "1D"}) or {}
+        base = hist.get("base_value")
+        base = float(base) if base is not None else None
+        return {"equity": equity, "last_equity": last_equity, "base_value": base,
+                "total_pnl": (equity - base) if base is not None else None}
+
     def positions(self) -> list[dict]:
         return self._http.get("/v2/positions") or []
 
