@@ -12,8 +12,8 @@ Daily, 2023-06-26 → 2026-06-25 (727 rows).
 
 | column | meaning | source |
 | --- | --- | --- |
-| `li_smm_usd_t` | Battery-grade lithium carbonate spot, USD/tonne (VAT-incl) | SMM `SMM-Li-LC-001` |
-| `ndpr_smm_usd_t` | Praseodymium-neodymium oxide, USD/tonne | SMM Pr-Nd oxide |
+| `li_smm_usd_t` | Battery-grade lithium carbonate spot, USD/tonne (**ex-VAT**) | SMM `SMM-Li-LC-001` |
+| `ndpr_smm_usd_t` | Praseodymium-neodymium oxide, USD/tonne (**ex-VAT**) | SMM `SMM-RE-OX-001` |
 | `gfex_li_active` | Most-liquid GFEX lithium-carbonate futures settle, CNY/t | GFEX (free) |
 | `gfex_li_term_slope` | (deferred/front − 1); **negative = backwardation** | derived from GFEX curve |
 | `gfex_li_oi` | total open interest across contracts | GFEX (free) |
@@ -38,6 +38,20 @@ Best fits: lithium ← ALB (R²=0.86), NdPr ← REMX (R²=0.71).
 3. To replace estimates with real long history: re-pull the SMM weekly/monthly endpoint
    (the daily view caps at 36 months; weekly/monthly go back further). Needs a fresh
    metal.com login (`/setup-browser-cookies`).
+
+## Already in tal Snowflake — this is a BACKFILL
+
+tal ingests the same source into `SOURCES.SMM_SPOT_DAILY` (keyed by `SMM_SERIES_ID`,
+e.g. `SMM-Li-LC-001`, `SMM-RE-OX-001`; joins `MATERIAL_QID` → `PCF.TICKER_REFERENCE`)
+and `SOURCES.GFEX_PRICES_RAW` (varieties lc/si/ps/pt/pd). **But tal only started ingesting
+~2026-04-03** (≈55 daily obs/series); GFEX from 2025-11-27. This dataset is the **3-year
+backfill** (lithium/NdPr from 2023-06; GFEX lc from 2023-07) that predates tal's ingestion.
+
+Validated: over the 55-day overlap, this dataset's SMM prices equal `SMM_SPOT_DAILY` exactly
+**once divided by 1.13** — tal stores **ex-VAT**, the browser endpoint returned VAT-inclusive.
+**These CSVs have already been converted to ex-VAT (÷1.13)** so they splice seamlessly onto
+`SMM_SPOT_DAILY`. Read live data from Snowflake (`equity_options/sources/smm.py`); use this
+file only for pre-2026-04 history. (GFEX `gfex_li_active` is CNY/t futures settle — no VAT.)
 
 ## Provenance / how to refresh
 - SMM daily: authenticated pull from `platform.metal.com/spotoverseascenter/v1/product_info/history/<product_id>`
