@@ -109,6 +109,69 @@ def test_build_close_order_reverses_legs():
     assert order.limit_price > 0
 
 
+class _PagedHTTP:
+    """Fake AlpacaHTTP returning canned /v2/orders pages, recording the params."""
+
+    def __init__(self, pages):
+        self.pages = list(pages)
+        self.calls = []
+
+    def get(self, endpoint, params=None):
+        self.calls.append(dict(params or {}))
+        return self.pages.pop(0)
+
+
+def test_list_all_orders_paginates_past_page_cap():
+    from quantbots.equity_options.execution.alpaca import AlpacaPaperBroker
+
+    broker = AlpacaPaperBroker(key="k", secret="s")
+    page1 = [{"id": "b", "submitted_at": "2026-07-07T14:00:00Z"},
+             {"id": "a", "submitted_at": "2026-07-06T14:00:00Z"}]
+    page2 = [{"id": "z", "submitted_at": "2026-07-01T14:00:00Z"}]
+    broker._http = _PagedHTTP([page1, page2])
+    orders = broker.list_all_orders(status="all", page_size=2)
+    assert [o["id"] for o in orders] == ["b", "a", "z"]
+    assert "until" not in broker._http.calls[0]
+    assert broker._http.calls[1]["until"] == "2026-07-06T14:00:00Z"
+
+
+def test_settle_absent_books_ghost_legs_closed(tmp_path):
+    db = tmp_path / "eo.sqlite"
+    long_sym = build_occ("GDX", FAR, "put", 100)
+    short_sym = build_occ("GDX", FAR, "put", 88)
+    held_sym = build_occ("WPM", FAR, "put", 90)
+    with OptionsStore(db) as store:
+        store.record_leg(ticket_id="T1", underlying="GDX", structure="bear_put_spread",
+                         symbol=long_sym, trade_type="ENTRY", side="BUY", qty=6,
+                         fill_price=16.6, amount=-9960.0, broker="paper", status="filled")
+        store.record_leg(ticket_id="T1", underlying="GDX", structure="bear_put_spread",
+                         symbol=short_sym, trade_type="ENTRY", side="SELL", qty=6,
+                         fill_price=7.8, amount=4680.0, broker="paper", status="filled")
+        store.record_leg(ticket_id="T2", underlying="WPM", structure="long_put",
+                         symbol=held_sym, trade_type="ENTRY", side="BUY", qty=2,
+                         fill_price=5.0, amount=-1000.0, broker="paper", status="filled")
+        assert set(store.open_positions()) == {long_sym, short_sym, held_sym}
+        n = store.settle_absent(broker_open_symbols={held_sym}, open_order_symbols=set())
+        assert n == 2
+        assert set(store.open_positions()) == {held_sym}  # broker-held leg untouched
+        r = store.realized_and_open(open_symbols={held_sym})
+        assert abs(r["realized"] - (-9960.0 + 4680.0)) < 1e-6  # full GDX premium realized
+        # idempotent: a second pass settles nothing
+        assert store.settle_absent(broker_open_symbols={held_sym},
+                                   open_order_symbols=set()) == 0
+
+
+def test_settle_absent_spares_symbols_with_open_orders(tmp_path):
+    db = tmp_path / "eo.sqlite"
+    sym = build_occ("FNV", FAR, "put", 270)
+    with OptionsStore(db) as store:
+        store.record_leg(ticket_id="T1", underlying="FNV", structure="long_put",
+                         symbol=sym, trade_type="ENTRY", side="BUY", qty=2,
+                         fill_price=60.0, amount=-12000.0, broker="paper", status="filled")
+        n = store.settle_absent(broker_open_symbols=set(), open_order_symbols={sym})
+        assert n == 0 and set(store.open_positions()) == {sym}
+
+
 def test_reconcile_fills_updates_ledger(tmp_path):
     db = tmp_path / "eo.sqlite"
     sym = build_occ("GDX", FAR, "put", 100)

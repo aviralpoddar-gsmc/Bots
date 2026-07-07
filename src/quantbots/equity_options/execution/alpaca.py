@@ -100,6 +100,20 @@ class AlpacaPaperBroker(BrokerClient):
         return self._http.get("/v2/orders", {"status": status, "limit": limit,
                                              "nested": "true"}) or []
 
+    def list_all_orders(self, *, status: str = "all", page_size: int = 500) -> list[dict]:
+        """Full order history. /v2/orders caps each response (max 500), so page
+        newest-first via `until` = oldest submitted_at of the previous page. A capped
+        single call here once left 65 ledger legs unreconciled — never cap history."""
+        out: list[dict] = []
+        params = {"status": status, "limit": page_size, "direction": "desc",
+                  "nested": "true"}
+        while True:
+            page = self._http.get("/v2/orders", params) or []
+            out.extend(page)
+            if len(page) < page_size:
+                return out
+            params = {**params, "until": min(o["submitted_at"] for o in page)}
+
     def is_market_open(self) -> bool:
         clk = self._http.get("/v2/clock") or {}
         return bool(clk.get("is_open"))

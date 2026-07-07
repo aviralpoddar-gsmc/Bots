@@ -121,6 +121,30 @@ class OptionsStore:
         self.conn.commit()
         return updated
 
+    def settle_absent(self, *, broker_open_symbols: set[str],
+                      open_order_symbols: set[str]) -> int:
+        """Book a closing row for ledger-open legs the broker no longer holds.
+
+        Alpaca paper can remove positions without a closing fill (overnight
+        re-marks settled the whole book to zero on 2026-07-07). No cash moved, so
+        the offsetting row carries amount 0.0 — the entry premium becomes realized
+        loss, matching broker equity. Symbols the broker still holds, or that have
+        a working order, are left alone. Returns the number of legs settled.
+        """
+        settled = 0
+        for sym, pos in self.open_positions().items():
+            if sym in broker_open_symbols or sym in open_order_symbols:
+                continue
+            net = pos["net_contracts"]
+            self.record_leg(
+                ticket_id=f"settle-{sym}", underlying=pos["underlying"],
+                structure="settle", symbol=sym, trade_type="EXPIRY_CLOSE",
+                side="SELL" if net > 0 else "BUY", qty=abs(net), fill_price=None,
+                amount=0.0, broker="paper", status="settled",
+                reasoning="broker-truth settle: leg absent at broker, no closing fill")
+            settled += 1
+        return settled
+
     def open_positions(self) -> dict[str, dict]:
         """{symbol: {net_contracts, net_cash, ...}} for OPEN legs (net qty != 0).
 

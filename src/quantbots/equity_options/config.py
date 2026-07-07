@@ -46,6 +46,9 @@ DEFAULT_RISK_LIMITS: dict[str, Any] = {
     "max_net_vega": 500.0,
     "max_net_theta": 100.0,
     "max_gross_gamma": 200.0,
+    # Circuit breaker (breaker.py): halt new entries when equity fell more than
+    # this vs prior close — a paper mark-out once wiped -17% overnight with no fills.
+    "max_day_equity_drop_pct": 0.08,
 }
 
 

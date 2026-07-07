@@ -138,6 +138,21 @@ def trade(underlying: str = typer.Option(None), paper: bool = typer.Option(False
     broker = make_broker(mode, key=cfg.alpaca_key, secret=cfg.alpaca_secret,
                          risk_limits_file=cfg.risk_limits_file)
     bankroll = broker.account_equity()
+    # Circuit breaker: never open into an anomalous account (equity cliff or
+    # ledger/broker disagreement). Exits and hedges are handled elsewhere.
+    if mode == PAPER:
+        from .breaker import entry_halt_reason
+        acct = broker.account_pnl()
+        with OptionsStore() as store:
+            ledger_open = set(store.open_positions())
+        halt = entry_halt_reason(
+            equity=acct["equity"], last_equity=acct["last_equity"],
+            ledger_open_symbols=ledger_open,
+            broker_open_symbols={p["symbol"] for p in broker.positions()},
+            max_drop_pct=cfg.risk_limits["max_day_equity_drop_pct"])
+        if halt:
+            console.print(f"[red bold]ENTRY HALTED (circuit breaker):[/red bold] {halt}")
+            return
     # Position awareness: never stack a second structure on a name we already hold.
     exclude = _held_underlyings(broker)
     if exclude:
@@ -257,17 +272,29 @@ def monitor(paper: bool = typer.Option(False), interval: int = typer.Option(300,
 
 @app.command()
 def reconcile(config: str = typer.Option(None)):
-    """Sync the local ledger to ACTUAL Alpaca fills (broker = source of truth)."""
+    """Sync the local ledger to ACTUAL Alpaca fills (broker = source of truth).
+
+    Pages the FULL order history (a capped fetch once left 65 legs stale), then
+    settles ledger-open legs the broker no longer holds — paper can remove
+    positions without a closing fill."""
     from .execution.alpaca import AlpacaPaperBroker
     from .store.db import OptionsStore
 
     cfg = load_config(config) if config else load_config()
     _need_keys(cfg)
     broker = AlpacaPaperBroker(key=cfg.alpaca_key, secret=cfg.alpaca_secret)
-    orders = broker.list_orders(status="all", limit=200)
+    orders = broker.list_all_orders(status="all")
+    broker_open = {p["symbol"] for p in broker.positions()}
+    working = {leg.get("symbol") for o in broker.list_orders(status="open", limit=200)
+               for leg in (o.get("legs") or [o])} - {None}
     with OptionsStore() as store:
         n = store.reconcile_fills(orders)
+        settled = store.settle_absent(broker_open_symbols=broker_open,
+                                      open_order_symbols=working)
     console.print(f"[green]Reconciled[/green] {n} ledger legs against {len(orders)} broker orders.")
+    if settled:
+        console.print(f"[yellow]Settled {settled} ghost leg(s)[/yellow] absent at broker "
+                      "(no closing fill — premium booked as realized).")
 
 
 @app.command()
