@@ -24,8 +24,12 @@ def test_realized_and_open_ledger_inference(tmp_path):
         # 1) closed round-trip: paid 500, sold for 700 -> realized +200
         _leg(store, "t1", "RT", "BUY", -500.0, "filled")
         _leg(store, "t1", "RT", "SELL", +700.0, "filled")
-        # 2) expired worthless: paid 300, no closing row -> realized -300
-        _leg(store, "t2", "EXP", "BUY", -300.0, "expired")
+        # 2) expired worthless while HELD: paid 300, then a broker-truth settle
+        #    row (amount 0, as settle_absent writes) -> realized -300
+        _leg(store, "t2", "EXP", "BUY", -300.0, "filled")
+        store.record_leg(ticket_id="settle-EXP", underlying="FCX", structure="settle",
+                         symbol="EXP", trade_type="EXPIRY_CLOSE", side="SELL", qty=1,
+                         fill_price=None, amount=0.0, broker="paper", status="settled")
         # 3) still open: paid 400, filled and held -> NOT realized, cost basis 400
         _leg(store, "t3", "OPEN", "BUY", -400.0, "filled")
         # 4) never filled -> ignored entirely
@@ -35,11 +39,16 @@ def test_realized_and_open_ledger_inference(tmp_path):
         assert round(br["realized"], 2) == -100.0          # +200 - 300
         assert round(br["open_cost_basis"], 2) == 400.0
         assert br["open_positions"] == 1                   # only t3
-        assert br["closed_positions"] == 2                 # t1 + t2
+        assert br["closed_positions"] == 3                 # t1 + t2 + its settle row
         assert br["open_symbols"] == {"OPEN"}
 
-        # expired leg must NOT show up as an open position (the original bug)
+        # settled leg must NOT show up as an open position (the original bug)
         assert "EXP" not in store.open_positions()
+        # a lapsed-unfilled order (status expired, amount zeroed by reconcile)
+        # is a NON-event: no position, no realized cash
+        _leg(store, "t5", "LAPSED", "BUY", 0.0, "expired")
+        assert "LAPSED" not in store.open_positions()
+        assert round(store.realized_and_open()["realized"], 2) == -100.0
 
 
 def test_realized_and_open_with_broker_truth(tmp_path):

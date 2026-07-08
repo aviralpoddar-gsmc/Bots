@@ -78,8 +78,10 @@ class AlpacaPaperBroker(BrokerClient):
         history origin), and total_pnl = equity - base_value. The caller derives
         realized = total_pnl - unrealized(open positions)."""
         acct = self._http.get("/v2/account") or {}
-        equity = float(acct.get("equity", 0.0))
-        last_equity = float(acct.get("last_equity") or 0.0)
+        # Fail fast: a malformed payload must raise, not default to 0.0 — a zero
+        # last_equity silently disarms the circuit breaker's equity-cliff check.
+        equity = float(acct["equity"])
+        last_equity = float(acct["last_equity"])
         hist = self._http.get("/v2/account/portfolio/history",
                               {"period": "all", "timeframe": "1D"}) or {}
         base = hist.get("base_value")
@@ -107,12 +109,20 @@ class AlpacaPaperBroker(BrokerClient):
         out: list[dict] = []
         params = {"status": status, "limit": page_size, "direction": "desc",
                   "nested": "true"}
-        while True:
+        prev_until = None
+        for _ in range(200):  # hard page cap: fail loudly, never spin inside launchd
             page = self._http.get("/v2/orders", params) or []
             out.extend(page)
             if len(page) < page_size:
                 return out
-            params = {**params, "until": min(o["submitted_at"] for o in page)}
+            until = min(o["submitted_at"] for o in page)
+            if prev_until is not None and until >= prev_until:
+                raise RuntimeError(
+                    f"order-history pagination stalled: `until` cursor not decreasing "
+                    f"({until!r} after {prev_until!r})")
+            prev_until = until
+            params = {**params, "until": until}
+        raise RuntimeError("order-history pagination exceeded 200 pages — aborting")
 
     def is_market_open(self) -> bool:
         clk = self._http.get("/v2/clock") or {}

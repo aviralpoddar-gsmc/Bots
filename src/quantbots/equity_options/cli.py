@@ -139,19 +139,31 @@ def trade(underlying: str = typer.Option(None), paper: bool = typer.Option(False
                          risk_limits_file=cfg.risk_limits_file)
     bankroll = broker.account_equity()
     # Circuit breaker: never open into an anomalous account (equity cliff or
-    # ledger/broker disagreement). Exits and hedges are handled elsewhere.
+    # ledger/broker disagreement). Exits and hedges are handled elsewhere. A trip
+    # LATCHES in the store and blocks entries until a human runs `eo resume`.
     if mode == PAPER:
         from .breaker import entry_halt_reason
-        acct = broker.account_pnl()
         with OptionsStore() as store:
+            latched = store.halt_reason()
             ledger_open = set(store.open_positions())
+        if latched:
+            console.print(f"[red bold]ENTRY HALTED (latched):[/red bold] {latched} "
+                          "— clear with `eo resume` after review.")
+            return
+        acct = broker.account_pnl()
+        working = {leg.get("symbol") for o in broker.list_orders(status="open", limit=200)
+                   for leg in (o.get("legs") or [o])} - {None}
         halt = entry_halt_reason(
             equity=acct["equity"], last_equity=acct["last_equity"],
             ledger_open_symbols=ledger_open,
             broker_open_symbols={p["symbol"] for p in broker.positions()},
+            open_order_symbols=working,
             max_drop_pct=cfg.risk_limits["max_day_equity_drop_pct"])
         if halt:
-            console.print(f"[red bold]ENTRY HALTED (circuit breaker):[/red bold] {halt}")
+            with OptionsStore() as store:
+                store.trip_halt(halt)
+            console.print(f"[red bold]ENTRY HALTED (circuit breaker):[/red bold] {halt} "
+                          "— latched; `eo resume` to clear.")
             return
     # Position awareness: never stack a second structure on a name we already hold.
     exclude = _held_underlyings(broker)
@@ -271,30 +283,58 @@ def monitor(paper: bool = typer.Option(False), interval: int = typer.Option(300,
 
 
 @app.command()
-def reconcile(config: str = typer.Option(None)):
+def reconcile(force_settle: bool = typer.Option(False, help="bypass the mass-settle cap "
+                                                "after a human-verified wipeout"),
+              config: str = typer.Option(None)):
     """Sync the local ledger to ACTUAL Alpaca fills (broker = source of truth).
 
     Pages the FULL order history (a capped fetch once left 65 legs stale), then
     settles ledger-open legs the broker no longer holds — paper can remove
-    positions without a closing fill."""
+    positions without a closing fill. Any settlement of filled legs is anomalous,
+    so it TRIPS the entry latch (`eo resume` to clear)."""
     from .execution.alpaca import AlpacaPaperBroker
-    from .store.db import OptionsStore
+    from .store.db import MassSettleRefused, OptionsStore
 
     cfg = load_config(config) if config else load_config()
     _need_keys(cfg)
     broker = AlpacaPaperBroker(key=cfg.alpaca_key, secret=cfg.alpaca_secret)
     orders = broker.list_all_orders(status="all")
-    broker_open = {p["symbol"] for p in broker.positions()}
+    # Working orders BEFORE positions: an order that fills between the two reads
+    # then shows up in positions and is spared; the reverse order ghost-settles it.
     working = {leg.get("symbol") for o in broker.list_orders(status="open", limit=200)
                for leg in (o.get("legs") or [o])} - {None}
+    broker_open = {p["symbol"] for p in broker.positions()}
     with OptionsStore() as store:
         n = store.reconcile_fills(orders)
-        settled = store.settle_absent(broker_open_symbols=broker_open,
-                                      open_order_symbols=working)
+        try:
+            settled = store.settle_absent(broker_open_symbols=broker_open,
+                                          open_order_symbols=working, force=force_settle)
+        except MassSettleRefused as e:
+            store.trip_halt(str(e))
+            console.print(f"[red bold]SETTLEMENT REFUSED:[/red bold] {e}")
+            console.print("[red]Entry latch tripped — `eo resume` after review.[/red]")
+            settled = 0
+        if settled:
+            store.trip_halt(f"reconcile settled {settled} filled ghost leg(s) absent at "
+                            "broker — review before re-arming")
     console.print(f"[green]Reconciled[/green] {n} ledger legs against {len(orders)} broker orders.")
     if settled:
         console.print(f"[yellow]Settled {settled} ghost leg(s)[/yellow] absent at broker "
-                      "(no closing fill — premium booked as realized).")
+                      "(no closing fill — premium booked as realized). Entry latch tripped.")
+
+
+@app.command()
+def resume(config: str = typer.Option(None)):
+    """Clear a latched circuit-breaker halt (run only after reviewing the trip reason)."""
+    from .store.db import OptionsStore
+
+    with OptionsStore() as store:
+        reason = store.halt_reason()
+        if reason is None:
+            console.print("No halt latched — entries already enabled.")
+            return
+        store.clear_halt()
+    console.print(f"[green]Halt cleared.[/green] Was: {reason}")
 
 
 @app.command()
@@ -416,7 +456,7 @@ def backtest(underlying: str = typer.Option(None, help="Ticker (default: all ena
     today = date.today()
     end_d = today - timedelta(days=horizon + 21)
     as_of_dates = walk_forward_dates(start_d, end_d, step_days=fold_days)
-    cadence = "bi-weekly" if fold_days == 14 else ("monthly" if fold_days == 30 else f"{fold_days}d")
+    cadence = {14: "bi-weekly", 30: "monthly"}.get(fold_days, f"{fold_days}d")
     console.print(f"[dim]Alpaca options history starts {ALPACA_OPTIONS_HISTORY_START}; "
                   f"{len(as_of_dates)} {cadence} folds {start_d}..{end_d}, horizon {horizon}d.[/dim]")
 
@@ -481,7 +521,7 @@ def snapshot(config: str = typer.Option(None)):
             closed_count = ledger["closed_positions"]
             # Realized from broker truth (total account P&L minus open marks); fall back to
             # the ledger reconstruction only if portfolio-history base_value is unavailable.
-            if acct and acct.get("total_pnl") is not None:
+            if acct and acct["total_pnl"] is not None:
                 realized = acct["total_pnl"] - unrealized
                 scoreboard = (f"equity {acct['equity']:,.0f}  total P&L {acct['total_pnl']:+,.0f}"
                               f"  day {acct['equity'] - acct['last_equity']:+,.0f}")

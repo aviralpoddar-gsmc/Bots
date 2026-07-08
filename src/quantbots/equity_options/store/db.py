@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +20,29 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _nonevent(t: dict) -> bool:
+    """Rows that represent no economic event: never-accepted submits and
+    lapsed-unfilled orders (no cash moved, no position taken). An expired row
+    keeps its submit-time fill_price estimate, so zero `amount` (set by
+    reconcile_fills) is the discriminator — a partial fill carries real cash."""
+    return (t["status"] in ("canceled", "rejected", "intended")
+            or (t["status"] == "expired" and t["amount"] == 0.0))
+
+
+class MassSettleRefused(RuntimeError):
+    """settle_absent would zero more legs than the safety cap allows — one
+    glitched empty /v2/positions response must not corrupt the whole ledger."""
+
+
 class OptionsStore:
     def __init__(self, path: Path | str = DEFAULT_DB):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
+        # Two writer processes share this DB (daily cycle + intraday monitor).
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=10000")
         self.conn.executescript(_SCHEMA_PATH.read_text())
         self.conn.commit()
 
@@ -108,21 +125,25 @@ class OptionsStore:
                     (ticket, sym)).fetchone()
                 if row is None:
                     continue
+                leg_status = leg.get("status") or order_status
                 amount = None
                 if fill is not None:
                     sign = -1 if row["side"] == "BUY" else 1
                     amount = sign * row["qty"] * fill * 100
+                elif leg_status in ("expired", "canceled"):
+                    amount = 0.0  # lapsed unfilled: no cash moved — kill the submit-time estimate
                 self.conn.execute(
                     "UPDATE option_trade SET status=?, "
                     "fill_price=COALESCE(?, fill_price), amount=COALESCE(?, amount) "
                     "WHERE trade_id=?",
-                    (leg.get("status") or order_status, fill, amount, row["trade_id"]))
+                    (leg_status, fill, amount, row["trade_id"]))
                 updated += 1
         self.conn.commit()
         return updated
 
     def settle_absent(self, *, broker_open_symbols: set[str],
-                      open_order_symbols: set[str]) -> int:
+                      open_order_symbols: set[str], max_legs: int = 5,
+                      min_age_hours: float = 1.0, force: bool = False) -> int:
         """Book a closing row for ledger-open legs the broker no longer holds.
 
         Alpaca paper can remove positions without a closing fill (overnight
@@ -130,11 +151,29 @@ class OptionsStore:
         the offsetting row carries amount 0.0 — the entry premium becomes realized
         loss, matching broker equity. Symbols the broker still holds, or that have
         a working order, are left alone. Returns the number of legs settled.
+
+        Two guards (both bypassed by `force`, for a human-confirmed wipeout):
+          - legs whose latest ledger activity is younger than `min_age_hours` are
+            skipped — a just-filled entry may not show at the broker yet;
+          - more than `max_legs` candidates raises MassSettleRefused — a single
+            glitched empty /v2/positions response must not zero the whole book.
         """
-        settled = 0
+        cutoff = (datetime.now(UTC) - timedelta(hours=min_age_hours)).isoformat()
+        candidates = []
         for sym, pos in self.open_positions().items():
             if sym in broker_open_symbols or sym in open_order_symbols:
                 continue
+            last = self.conn.execute(
+                "SELECT MAX(date_executed) d FROM option_trade WHERE symbol=?",
+                (sym,)).fetchone()["d"]
+            if not force and last > cutoff:
+                continue
+            candidates.append((sym, pos))
+        if not force and len(candidates) > max_legs:
+            raise MassSettleRefused(
+                f"refusing to settle {len(candidates)} legs at once (cap {max_legs}) — "
+                "verify the broker positions read and re-run `eo reconcile --force-settle`")
+        for sym, pos in candidates:
             net = pos["net_contracts"]
             self.record_leg(
                 ticket_id=f"settle-{sym}", underlying=pos["underlying"],
@@ -142,8 +181,24 @@ class OptionsStore:
                 side="SELL" if net > 0 else "BUY", qty=abs(net), fill_price=None,
                 amount=0.0, broker="paper", status="settled",
                 reasoning="broker-truth settle: leg absent at broker, no closing fill")
-            settled += 1
-        return settled
+        return len(candidates)
+
+    # --- circuit-breaker latch --------------------------------------------
+
+    def trip_halt(self, reason: str) -> None:
+        self.conn.execute(
+            "INSERT INTO breaker_halt (id, reason, tripped_at) VALUES (1, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET reason=excluded.reason, "
+            "tripped_at=excluded.tripped_at", (reason, _now()))
+        self.conn.commit()
+
+    def clear_halt(self) -> None:
+        self.conn.execute("DELETE FROM breaker_halt")
+        self.conn.commit()
+
+    def halt_reason(self) -> str | None:
+        row = self.conn.execute("SELECT reason FROM breaker_halt").fetchone()
+        return row["reason"] if row else None
 
     def open_positions(self) -> dict[str, dict]:
         """{symbol: {net_contracts, net_cash, ...}} for OPEN legs (net qty != 0).
@@ -153,7 +208,7 @@ class OptionsStore:
         agg: dict[str, dict] = defaultdict(lambda: {"net_contracts": 0, "net_cash": 0.0,
                                                      "underlying": None, "multiplier": 100})
         for t in self.trades():
-            if t["status"] in ("canceled", "rejected", "intended"):
+            if _nonevent(t):
                 continue
             sign = 1 if t["side"] == "BUY" else -1
             a = agg[t["symbol"]]
@@ -161,12 +216,9 @@ class OptionsStore:
             a["net_cash"] += t["amount"]
             a["underlying"] = t["underlying"]
             a["multiplier"] = t["multiplier"]
-            if t["status"] == "expired":
-                a["expired"] = True
-        # An expired leg has no closing row, so its net contracts never return to 0.
-        # Treat any symbol with an expired leg as CLOSED (settled), not open.
-        return {sym: v for sym, v in agg.items()
-                if v["net_contracts"] != 0 and not v.get("expired")}
+        # Closure comes only from EXIT fills or settle_absent rows — a lapsed
+        # unfilled order (status "expired", no fill) is a non-event, never a close.
+        return {sym: v for sym, v in agg.items() if v["net_contracts"] != 0}
 
     def realized_and_open(self, open_symbols: set[str] | None = None) -> dict:
         """Split the filled/expired ledger into REALIZED (closed) vs OPEN cash flows.
@@ -177,26 +229,23 @@ class OptionsStore:
 
         `open_symbols`: OCC symbols the BROKER still holds (authoritative). When given,
         any ledger leg whose symbol is NOT held counts as realized. When None (no
-        broker available), a symbol is inferred open iff its net signed contracts != 0
-        and none of its legs expired (an expired leg settled, so it is closed).
+        broker available), a symbol is inferred open iff its net signed contracts != 0.
+        Lapsed-unfilled orders are non-events (zero cash, no position) — see _nonevent.
 
         Returns {realized, open_cost_basis, open_positions, closed_positions,
         open_symbols} where realized = closed round-trips + expired-worthless losses.
         """
         by_sym: dict[str, dict] = defaultdict(
-            lambda: {"net": 0, "cash": 0.0, "expired": False, "tickets": set()})
+            lambda: {"net": 0, "cash": 0.0, "tickets": set()})
         for t in self.trades():
-            if t["status"] in ("canceled", "rejected", "intended"):
+            if _nonevent(t):
                 continue
             s = by_sym[t["symbol"]]
             s["net"] += (1 if t["side"] == "BUY" else -1) * t["qty"]
             s["cash"] += t["amount"]
             s["tickets"].add(t["ticket_id"])
-            if t["status"] == "expired":
-                s["expired"] = True
         if open_symbols is None:
-            open_set = {sym for sym, v in by_sym.items()
-                        if v["net"] != 0 and not v["expired"]}
+            open_set = {sym for sym, v in by_sym.items() if v["net"] != 0}
         else:
             open_set = {sym for sym in by_sym if sym in open_symbols}
         realized = sum(v["cash"] for sym, v in by_sym.items() if sym not in open_set)

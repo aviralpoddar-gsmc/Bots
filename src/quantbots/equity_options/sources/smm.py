@@ -13,7 +13,6 @@ date; the local backfill fills everything before it. Read-only — all access go
 from __future__ import annotations
 
 import logging
-import time
 from pathlib import Path
 
 from . import tal_snowflake as ts
@@ -31,28 +30,36 @@ BACKFILL_COL: dict[str, str] = {
 }
 
 
-def _fresh(path: Path, max_age_hours: float) -> bool:
-    return path.exists() and (time.time() - path.stat().st_mtime) / 3600 < max_age_hours
+def _q(s: str) -> str:
+    """Escape a value for a Snowflake single-quoted literal. Quote-doubling alone
+    is bypassable (backslash escapes inside Snowflake string literals), so escape
+    backslashes first. The runner is SELECT-only, but stay airtight anyway."""
+    return s.replace("\\", "\\\\").replace("'", "''")
 
 
 def spot_series(series_id: str, *, splice: bool = True, max_age_hours: float = 12.0):
     """Daily ex-VAT USD/tonne spot for one SMM series, Snowflake + local backfill.
 
     Returns DataFrame indexed by `date` (DatetimeIndex) with columns
-    `price_usd_t` and `source` ('snowflake' | 'backfill'). Snowflake wins on overlap.
-    Raises tal_snowflake.TalUnavailable if Snowflake can't be reached and no backfill exists.
+    `price_usd_t` and `source` ('snowflake' | 'backfill'). Snowflake wins on overlap;
+    if Snowflake is unreachable the backfill alone is served. Raises
+    tal_snowflake.TalUnavailable only when there is no data from either source.
     """
     import pandas as pd
 
-    cache = CACHE_DIR / f"smm_spot_{series_id.replace('-', '_')}.pkl"
-    if _fresh(cache, max_age_hours):
+    cache = CACHE_DIR / f"smm_spot_{series_id.replace('-', '_')}{'' if splice else '_sf_only'}.pkl"
+    if ts._fresh(cache, max_age_hours):
         return pd.read_pickle(cache)
 
-    sid = series_id.replace("'", "''")
-    rows = ts.query(
-        "select to_char(OBSERVATION_DATE,'YYYY-MM-DD') D, PRICE_AVERAGE P "
-        f"from SOURCES.SMM_SPOT_DAILY where SMM_SERIES_ID='{sid}' and PRICE_AVERAGE is not null "
-        "order by OBSERVATION_DATE")
+    try:
+        rows = ts.query(
+            "select to_char(OBSERVATION_DATE,'YYYY-MM-DD') D, PRICE_AVERAGE P "
+            f"from SOURCES.SMM_SPOT_DAILY where SMM_SERIES_ID='{_q(series_id)}' "
+            "and PRICE_AVERAGE is not null order by OBSERVATION_DATE")
+    except ts.TalUnavailable:
+        if not splice:
+            raise
+        rows = []  # Snowflake down — serve the local backfill alone
     sf = pd.DataFrame(rows)
     if len(sf):
         sf = sf.rename(columns={"D": "date", "P": "price_usd_t"})
@@ -85,7 +92,7 @@ def spot_series(series_id: str, *, splice: bool = True, max_age_hours: float = 1
 def list_series(*, category: str | None = None, limit: int = 500):
     """Catalog of available SMM series in Snowflake (series_id, product, category, span)."""
     import pandas as pd
-    where = f"where CATEGORY ilike '%{category}%' " if category else ""
+    where = f"where CATEGORY ilike '%{_q(category)}%' " if category else ""
     rows = ts.query(
         "select SMM_SERIES_ID, max(PRODUCT_NAME) PRODUCT, max(CATEGORY) CATEGORY, "
         "min(OBSERVATION_DATE) MIN_D, max(OBSERVATION_DATE) MAX_D, count(*) N "
@@ -101,14 +108,15 @@ def gfex_futures(variety: str = "lc", *, max_age_hours: float = 12.0):
     """
     import pandas as pd
     cache = CACHE_DIR / f"gfex_{variety}.pkl"
-    if _fresh(cache, max_age_hours):
+    if ts._fresh(cache, max_age_hours):
         return pd.read_pickle(cache)
-    v = variety.replace("'", "''")
     rows = ts.query(
         "select to_char(OBSERVATION_DATE,'YYYY-MM-DD') D, CONTRACT_SYMBOL, DELIVERY_MONTH, "
         "SETTLEMENT, OPEN_INTEREST, VOLUME from SOURCES.GFEX_PRICES_RAW "
-        f"where VARIETY='{v}' order by OBSERVATION_DATE, DELIVERY_MONTH")
+        f"where VARIETY='{_q(variety)}' order by OBSERVATION_DATE, DELIVERY_MONTH")
     df = pd.DataFrame(rows)
+    if df.empty:
+        return df  # don't cache emptiness for 12h
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     df.to_pickle(cache)
     return df

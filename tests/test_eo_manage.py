@@ -135,6 +135,9 @@ def test_list_all_orders_paginates_past_page_cap():
     assert broker._http.calls[1]["until"] == "2026-07-06T14:00:00Z"
 
 
+AGED = "2026-01-01T00:00:00+00:00"  # old enough to clear settle_absent's age guard
+
+
 def test_settle_absent_books_ghost_legs_closed(tmp_path):
     db = tmp_path / "eo.sqlite"
     long_sym = build_occ("GDX", FAR, "put", 100)
@@ -143,13 +146,16 @@ def test_settle_absent_books_ghost_legs_closed(tmp_path):
     with OptionsStore(db) as store:
         store.record_leg(ticket_id="T1", underlying="GDX", structure="bear_put_spread",
                          symbol=long_sym, trade_type="ENTRY", side="BUY", qty=6,
-                         fill_price=16.6, amount=-9960.0, broker="paper", status="filled")
+                         fill_price=16.6, amount=-9960.0, broker="paper", status="filled",
+                         date_executed=AGED)
         store.record_leg(ticket_id="T1", underlying="GDX", structure="bear_put_spread",
                          symbol=short_sym, trade_type="ENTRY", side="SELL", qty=6,
-                         fill_price=7.8, amount=4680.0, broker="paper", status="filled")
+                         fill_price=7.8, amount=4680.0, broker="paper", status="filled",
+                         date_executed=AGED)
         store.record_leg(ticket_id="T2", underlying="WPM", structure="long_put",
                          symbol=held_sym, trade_type="ENTRY", side="BUY", qty=2,
-                         fill_price=5.0, amount=-1000.0, broker="paper", status="filled")
+                         fill_price=5.0, amount=-1000.0, broker="paper", status="filled",
+                         date_executed=AGED)
         assert set(store.open_positions()) == {long_sym, short_sym, held_sym}
         n = store.settle_absent(broker_open_symbols={held_sym}, open_order_symbols=set())
         assert n == 2
@@ -167,9 +173,116 @@ def test_settle_absent_spares_symbols_with_open_orders(tmp_path):
     with OptionsStore(db) as store:
         store.record_leg(ticket_id="T1", underlying="FNV", structure="long_put",
                          symbol=sym, trade_type="ENTRY", side="BUY", qty=2,
-                         fill_price=60.0, amount=-12000.0, broker="paper", status="filled")
+                         fill_price=60.0, amount=-12000.0, broker="paper", status="filled",
+                         date_executed=AGED)
         n = store.settle_absent(broker_open_symbols=set(), open_order_symbols={sym})
         assert n == 0 and set(store.open_positions()) == {sym}
+
+
+def test_settle_absent_skips_recent_legs(tmp_path):
+    """A leg entered seconds ago may just not show at the broker yet (fill race) —
+    never settle it on one observation."""
+    db = tmp_path / "eo.sqlite"
+    sym = build_occ("FNV", FAR, "put", 270)
+    with OptionsStore(db) as store:
+        store.record_leg(ticket_id="T1", underlying="FNV", structure="long_put",
+                         symbol=sym, trade_type="ENTRY", side="BUY", qty=2,
+                         fill_price=60.0, amount=-12000.0, broker="paper", status="filled")
+        n = store.settle_absent(broker_open_symbols=set(), open_order_symbols=set())
+        assert n == 0 and set(store.open_positions()) == {sym}
+
+
+def test_settle_absent_refuses_mass_settlement(tmp_path):
+    """One glitched empty positions() response must not zero the whole book."""
+    from quantbots.equity_options.store.db import MassSettleRefused
+
+    db = tmp_path / "eo.sqlite"
+    syms = [build_occ("GDX", FAR, "put", 100 + i) for i in range(6)]
+    with OptionsStore(db) as store:
+        for i, sym in enumerate(syms):
+            store.record_leg(ticket_id=f"T{i}", underlying="GDX", structure="long_put",
+                             symbol=sym, trade_type="ENTRY", side="BUY", qty=1,
+                             fill_price=1.0, amount=-100.0, broker="paper", status="filled",
+                             date_executed=AGED)
+        import pytest
+        with pytest.raises(MassSettleRefused):
+            store.settle_absent(broker_open_symbols=set(), open_order_symbols=set())
+        assert len(store.open_positions()) == 6  # nothing was settled
+        n = store.settle_absent(broker_open_symbols=set(), open_order_symbols=set(),
+                                force=True)
+        assert n == 6 and store.open_positions() == {}
+
+
+def test_reconcile_fills_zeroes_expired_unfilled(tmp_path):
+    """A lapsed day-limit order moved no cash — its estimated amount must not
+    survive as a phantom realized loss."""
+    db = tmp_path / "eo.sqlite"
+    sym = build_occ("AEM", FAR, "put", 160)
+    with OptionsStore(db) as store:
+        store.record_leg(ticket_id="T1", underlying="AEM", structure="long_put",
+                         symbol=sym, trade_type="ENTRY", side="BUY", qty=3,
+                         fill_price=9.1, amount=-2730.0, broker="paper", status="pending_new")
+        store.reconcile_fills([{
+            "client_order_id": "T1", "status": "expired",
+            "legs": [{"symbol": sym, "filled_avg_price": None, "status": "expired"}],
+        }])
+        row = store.conn.execute("SELECT status, amount FROM option_trade").fetchone()
+        assert row["status"] == "expired" and row["amount"] == 0.0
+        # a non-event: neither an open position nor realized cash
+        assert store.open_positions() == {}
+        assert store.realized_and_open(open_symbols=set())["realized"] == 0.0
+
+
+def test_expired_unfilled_does_not_close_a_held_position(tmp_path):
+    """A filled position plus a later lapsed re-entry order on the same symbol
+    must remain OPEN (the old expired->closed inference wrongly closed it)."""
+    db = tmp_path / "eo.sqlite"
+    sym = build_occ("GDX", FAR, "put", 90)
+    with OptionsStore(db) as store:
+        store.record_leg(ticket_id="T1", underlying="GDX", structure="long_put",
+                         symbol=sym, trade_type="ENTRY", side="BUY", qty=10,
+                         fill_price=15.6, amount=-15600.0, broker="paper", status="filled",
+                         date_executed=AGED)
+        store.record_leg(ticket_id="T2", underlying="GDX", structure="long_put",
+                         symbol=sym, trade_type="ENTRY", side="BUY", qty=5,
+                         fill_price=15.0, amount=0.0,  # reconcile zeroed the lapsed order
+                         broker="paper", status="expired", date_executed=AGED)
+        pos = store.open_positions()
+        assert sym in pos and pos[sym]["net_contracts"] == 10
+
+
+def test_list_all_orders_raises_on_stalled_pagination():
+    """If the broker ignores `until`, fail loudly instead of spinning forever in launchd."""
+    from quantbots.equity_options.execution.alpaca import AlpacaPaperBroker
+
+    broker = AlpacaPaperBroker(key="k", secret="s")
+    page = [{"id": "a", "submitted_at": "2026-07-07T14:00:00Z"},
+            {"id": "b", "submitted_at": "2026-07-07T14:00:00Z"}]
+
+    class _StuckHTTP:
+        def get(self, endpoint, params=None):
+            return list(page)  # same full page forever
+
+    broker._http = _StuckHTTP()
+    import pytest
+    with pytest.raises(RuntimeError, match="pagination"):
+        broker.list_all_orders(status="all", page_size=2)
+
+
+def test_account_pnl_fails_fast_on_malformed_payload():
+    """A malformed /v2/account response must raise, not silently disarm the breaker."""
+    from quantbots.equity_options.execution.alpaca import AlpacaPaperBroker
+
+    broker = AlpacaPaperBroker(key="k", secret="s")
+
+    class _BadHTTP:
+        def get(self, endpoint, params=None):
+            return {"status": "ACTIVE"}  # no equity / last_equity
+
+    broker._http = _BadHTTP()
+    import pytest
+    with pytest.raises(KeyError):
+        broker.account_pnl()
 
 
 def test_reconcile_fills_updates_ledger(tmp_path):

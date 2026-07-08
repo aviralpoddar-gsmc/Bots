@@ -63,3 +63,11 @@ CREATE TABLE IF NOT EXISTS option_pnl_snapshot (
     open_positions   INTEGER NOT NULL,
     closed_positions INTEGER NOT NULL
 );
+
+-- Circuit-breaker latch: a single row means new entries are HALTED until a
+-- human clears it (`eo resume`). Survives restarts by design.
+CREATE TABLE IF NOT EXISTS breaker_halt (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    reason     TEXT NOT NULL,
+    tripped_at TEXT NOT NULL
+);
