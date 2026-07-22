@@ -9,67 +9,48 @@
 *{box-sizing:border-box; margin:0}
 html,body{height:100%; background:var(--bg); overflow:hidden}
 body{font-family:var(--sans); color:var(--ink)}
-
-#stage{position:absolute; top:50%; left:50%; width:1280px; height:720px;
-  transform-origin:center center;}
-.slide{position:absolute; inset:0; padding:70px 90px; display:none; flex-direction:column;
-  background:var(--bg);}
+#stage{position:absolute; top:50%; left:50%; width:1280px; height:720px; transform-origin:center center;}
+.slide{position:absolute; inset:0; padding:64px 88px; display:none; flex-direction:column; background:var(--bg);}
 .slide.active{display:flex}
 @media (prefers-reduced-motion: no-preference){
   .slide.active{animation:fade .25s ease}
   @keyframes fade{from{opacity:0}to{opacity:1}}
 }
-
-.eyebrow{font-family:var(--mono); font-size:15px; letter-spacing:.18em; text-transform:uppercase;
-  color:var(--signal); margin-bottom:22px}
-h1{font-size:64px; line-height:1.08; font-weight:700; text-wrap:balance}
-h2{font-size:44px; line-height:1.12; font-weight:700; margin-bottom:30px; text-wrap:balance}
-h3{font-size:24px; font-weight:650; margin:18px 0 8px}
-p,li{font-size:23px; line-height:1.5}
-ul{padding-left:30px; display:flex; flex-direction:column; gap:12px}
+.eyebrow{font-family:var(--mono); font-size:15px; letter-spacing:.18em; text-transform:uppercase; color:var(--signal); margin-bottom:20px}
+h1{font-size:62px; line-height:1.08; font-weight:700; text-wrap:balance}
+h2{font-size:42px; line-height:1.12; font-weight:700; margin-bottom:26px; text-wrap:balance}
+h3{font-size:23px; font-weight:650; margin:14px 0 8px}
+p,li{font-size:22px; line-height:1.48}
+ul{padding-left:28px; display:flex; flex-direction:column; gap:10px}
 li::marker{color:var(--muted)}
 strong{font-weight:700}
 em{color:var(--muted)}
 .dim{color:var(--muted)}
 .up{color:var(--up)} .down{color:var(--down)} .sig{color:var(--signal)} .warn{color:var(--amber)}
 .mono{font-family:var(--mono)}
-code{font-family:var(--mono); font-size:.85em; background:var(--panel2); border:1px solid var(--line);
-  border-radius:3px; padding:.05em .35em}
-
+code{font-family:var(--mono); font-size:.85em; background:var(--panel2); border:1px solid var(--line); border-radius:3px; padding:.05em .35em}
 .grow{flex:1; display:flex; flex-direction:column; justify-content:center}
-.cols{display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:start}
-
-.stats{display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--line);
-  border:1px solid var(--line); margin-top:44px}
-.stat{background:var(--panel); padding:18px 20px}
-.stat .v{font-family:var(--mono); font-size:30px; font-weight:600; color:var(--signal);
-  font-variant-numeric:tabular-nums}
-.stat .k{font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-top:6px}
-
-.big{font-family:var(--mono); font-weight:600; color:var(--signal)}
-.formula{font-family:var(--mono); font-size:30px; background:var(--panel); border:1px solid var(--line);
-  border-left:4px solid var(--signal); padding:24px 32px; margin:26px 0; white-space:nowrap}
-.callout{background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--up);
-  padding:20px 28px; margin-top:26px; font-size:22px; line-height:1.5}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:44px; align-items:start}
+.stats{display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--line); border:1px solid var(--line); margin-top:40px}
+.stat{background:var(--panel); padding:16px 18px}
+.stat .v{font-family:var(--mono); font-size:28px; font-weight:600; color:var(--signal); font-variant-numeric:tabular-nums}
+.stat .k{font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-top:6px}
+.formula{font-family:var(--mono); font-size:28px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--signal); padding:22px 30px; margin:22px 0; white-space:nowrap}
+.callout{background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--up); padding:18px 26px; margin-top:22px; font-size:21px; line-height:1.48}
 .callout.risk{border-left-color:var(--down)}
 .callout.note{border-left-color:var(--amber)}
-
-table{border-collapse:collapse; width:100%; font-size:21px; margin-top:8px}
-th{font-family:var(--mono); font-size:14px; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--muted); text-align:left; padding:10px 16px; border-bottom:1px solid var(--line)}
-td{padding:10px 16px; border-bottom:1px solid var(--line)}
+table{border-collapse:collapse; width:100%; font-size:20px; margin-top:6px}
+th{font-family:var(--mono); font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); text-align:left; padding:9px 14px; border-bottom:1px solid var(--line)}
+td{padding:8px 14px; border-bottom:1px solid var(--line)}
 td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
-
-.hud{position:fixed; bottom:18px; right:26px; font-family:var(--mono); font-size:14px;
-  color:var(--muted); z-index:10; user-select:none}
-#bar{position:fixed; top:0; left:0; height:3px; background:var(--signal); width:0%; z-index:10;
-  transition:width .2s ease}
-.footnote{font-family:var(--mono); font-size:15px; color:var(--muted); margin-top:auto; padding-top:24px}
-.klist{display:flex; flex-direction:column; gap:18px}
-.krow{display:grid; grid-template-columns:230px 1fr; gap:24px; align-items:baseline;
-  border-bottom:1px solid var(--line); padding-bottom:14px}
-.krow .k{font-family:var(--mono); font-size:19px; color:var(--signal)}
-.krow .d{font-size:21px; line-height:1.45}
+.hud{position:fixed; bottom:18px; right:26px; font-family:var(--mono); font-size:14px; color:var(--muted); z-index:10; user-select:none}
+#bar{position:fixed; top:0; left:0; height:3px; background:var(--signal); width:0%; z-index:10; transition:width .2s ease}
+.footnote{font-family:var(--mono); font-size:15px; color:var(--muted); margin-top:auto; padding-top:20px}
+.klist{display:flex; flex-direction:column; gap:14px}
+.krow{display:grid; grid-template-columns:250px 1fr; gap:22px; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:12px}
+.krow .k{font-family:var(--mono); font-size:18px; color:var(--signal)}
+.krow .d{font-size:20px; line-height:1.42}
+.krow .d .n{font-family:var(--mono)}
 </style>
 
 <div id="bar"></div>
@@ -80,8 +61,8 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:now
   <div class="grow">
     <p class="eyebrow">GSMC · Summer 2026 · Final Presentation</p>
     <h1>Markets, Models &amp;<br>the Machines That Trade Them</h1>
-    <p style="margin-top:26px; font-size:26px" class="dim">Ten weeks building GSMC's quant trading &amp; forecasting stack</p>
-    <p style="margin-top:10px; font-size:22px" class="mono dim">Aviral Poddar · UMass</p>
+    <p style="margin-top:24px; font-size:25px" class="dim">Ten weeks building GSMC's quant trading &amp; forecasting stack</p>
+    <p style="margin-top:8px; font-size:21px" class="mono dim">Aviral Poddar · UMass</p>
     <div class="stats">
       <div class="stat"><div class="v">Ṁ227k</div><div class="k">staked by the fleet</div></div>
       <div class="stat"><div class="v">23,616</div><div class="k">trades · 3,463 mkts</div></div>
@@ -92,210 +73,271 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:now
   </div>
 </section>
 
-<!-- 2 · ORIGIN -->
+<!-- 2 · BOTS: PLATFORM -->
 <section class="slide">
-  <p class="eyebrow">01 · Origin</p>
-  <h2>It started as one cocoa bot.</h2>
-  <div class="grow"><div class="cols">
-    <div>
-      <h3 class="dim">June 2025 — v1</h3>
-      <ul>
-        <li>One strategy: West-Africa <strong>rainfall anomalies → cocoa</strong></li>
-        <li>One LLM estimator, one backtest, dry-run only</li>
-      </ul>
-    </div>
-    <div>
-      <h3 class="sig">July 2026 — the stack</h3>
-      <ul>
-        <li><strong>quantbots</strong> — a bot <em>platform</em>: 32 strategies, 24 live bots</li>
-        <li><strong>equity_options</strong> — real listed options (Alpaca paper)</li>
-        <li><strong>tal</strong> — 8 merged PRs into the company platform</li>
-        <li><strong>3 research repos</strong> — diffusion models, RMT, a paper</li>
-        <li><strong>sandbox-agents</strong> — an LLM trading agent, safely gated</li>
-      </ul>
-    </div>
-  </div></div>
-  <p class="footnote">9 repositories · ~130 commits · every trade on the company's private Manifold clone or paper brokerage</p>
-</section>
-
-<!-- 3 · CANCELLATION REALITY -->
-<section class="slide">
-  <p class="eyebrow">02 · The market's physics</p>
-  <h2>93% of resolved markets <span class="down">cancel</span>.</h2>
-  <div class="grow"><div class="cols">
-    <div>
-      <p>Measured over <strong class="mono">9,578</strong> resolved markets on the clone: a market only settles YES/NO when its named source actually <em>publishes a value</em>.</p>
-      <ul style="margin-top:18px">
-        <li>LBMA precious prices <span class="up mono">~100%</span> resolve</li>
-        <li>Exchange-settled prices <span class="mono">27–40%</span></li>
-        <li>Production figures <span class="down mono">0.6%</span> · demand <span class="down mono">~0%</span></li>
-      </ul>
-    </div>
-    <div>
-      <div class="callout risk">
-        <strong>The trap:</strong> the deepest mispricings live in markets that will <em>never</em> resolve — nobody corrects them. Chasing raw edge is adverse selection.
-      </div>
-    </div>
-  </div></div>
-  <p class="footnote">paper EV ≠ realized edge — the single most important number in the system</p>
-</section>
-
-<!-- 4 · REALIZED EV -->
-<section class="slide">
-  <p class="eyebrow">02 · The market's physics</p>
-  <h2>So every bot prices the probability of <em>being paid</em>.</h2>
-  <div class="grow">
-    <div class="formula">realized EV&nbsp;&nbsp;=&nbsp;&nbsp;paper EV&nbsp;&nbsp;×&nbsp;&nbsp;P(market resolves)</div>
-    <ul>
-      <li><code>resolvability.py</code> scores every question from text alone — calibrated to observed resolve-rates by metric type and benchmark</li>
-      <li>Conditional markets score as the <strong>product of both legs</strong></li>
-      <li>Wired into the portfolio allocator for <strong>every bot automatically</strong></li>
-    </ul>
-    <div class="callout">
-      Measured effect: <strong class="up">~2× expected profit per mana staked</strong> — and the model-free bots' funded books shifted to ~90% price markets.
-    </div>
-  </div>
-</section>
-
-<!-- 5 · PLATFORM -->
-<section class="slide">
-  <p class="eyebrow">03 · The platform</p>
+  <p class="eyebrow">01 · Bots — the platform</p>
   <h2>quantbots: authors write one function.<br>The platform does the rest.</h2>
   <div class="grow">
-    <div class="formula" style="font-size:26px">Strategy.estimate(group) → {market_id: fair_probability}</div>
+    <div class="formula" style="font-size:25px">Strategy.estimate(group) → {market_id: fair_probability}</div>
     <div class="cols">
       <ul>
-        <li><strong>Sizing</strong> — 1/3-push under four caps (order, liquidity, price impact, budget)</li>
-        <li><strong>Allocation</strong> — EV-per-mana knapsack + correlation-group exposure caps</li>
+        <li><strong>Sizing</strong> — 1/3-push under four caps (order, liquidity, impact, budget)</li>
+        <li><strong>Allocation</strong> — EV-per-mana knapsack + correlation-group caps</li>
         <li><strong>Ledger</strong> — append-only; CANCEL closes at cost basis</li>
       </ul>
       <ul>
         <li><strong>Backtests</strong> — Brier, calibration, PnL under real sizing</li>
-        <li><strong>Ops</strong> — unattended daily launchd cycle, per-bot accounts, Doppler secrets</li>
-        <li><strong>Mission Control</strong> — live React dashboard: leaderboard, equity curves, trade tape (SSE)</li>
+        <li><strong>Ops</strong> — unattended daily launchd cycle, per-bot accounts</li>
+        <li><strong>Mission Control</strong> — live dashboard: leaderboard, equity curves, trade tape</li>
       </ul>
     </div>
   </div>
-  <p class="footnote">~19,200 LOC Python · 55 test files · clone-only client hard-wired by design</p>
+  <p class="footnote">grew from one cocoa bot (June 2025) into 32 registered strategies · ~19,200 LOC · 55 test files</p>
 </section>
 
-<!-- 6 · FLEET -->
+<!-- 3 · BOTS: CANCELLATION -->
 <section class="slide">
-  <p class="eyebrow">04 · The fleet</p>
-  <h2>24 live bots, 32 strategies, four families.</h2>
+  <p class="eyebrow">01 · Bots — the market's physics</p>
+  <h2>93% of resolved markets <span class="down">cancel</span> —<br>so every bot prices the odds of being paid.</h2>
+  <div class="grow">
+    <div class="formula">realized EV&nbsp;&nbsp;=&nbsp;&nbsp;paper EV&nbsp;&nbsp;×&nbsp;&nbsp;P(market resolves)</div>
+    <div class="cols">
+      <ul>
+        <li>Measured over <strong class="mono">9,578</strong> resolutions: LBMA precious <span class="up mono">~100%</span> resolve, exchange-settled <span class="mono">27–40%</span>, production <span class="down mono">0.6%</span>, demand <span class="down mono">~0%</span></li>
+        <li>Conditionals score as the <strong>product of both legs</strong></li>
+      </ul>
+      <div class="callout" style="margin-top:0">
+        Effect: <strong class="up">~2× expected profit per mana</strong>. The deepest mispricings never resolve — chasing raw edge is adverse selection. This is the immune system.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · BOTS: STRUCTURAL -->
+<section class="slide">
+  <p class="eyebrow">01 · Bots — structural arbitrage (model-free)</p>
+  <h2>Coherence is free money.</h2>
   <div class="grow">
     <div class="klist">
-      <div class="krow"><span class="k">structural arb</span><span class="d">no model, just shape — isotonic ladders, term structure, 2-D grids, Fréchet bounds</span></div>
-      <div class="krow"><span class="k">stochastic pricers</span><span class="d">lognormal spot · Monte-Carlo diffusion · cointegration pairs · ENSO persistence</span></div>
-      <div class="krow"><span class="k">fundamentals</span><span class="d">USDA S&amp;D, CFTC positioning, weather anomalies, news drift — one source, one bounded signal each</span></div>
-      <div class="krow"><span class="k">LLM forecasters</span><span class="d">percentile→CDF (local models) · Bayesian-mixture calibration · a comment-judging society</span></div>
+      <div class="krow"><span class="k">ladder_arb_1</span><span class="d">P(X&gt;K) must fall in K → <strong>weighted isotonic regression (PAVA)</strong> · <span class="n">3,939</span> trades, the fleet's biggest</span></div>
+      <div class="krow"><span class="k">term_structure_1</span><span class="d">fix strike, vary date → <strong>Gaussian kernel smoother</strong> fills stale dates from traded anchors · <span class="n">1,715</span> trades</span></div>
+      <div class="krow"><span class="k">stockpile_grid_arb_1</span><span class="d">2-D monotone surfaces via <strong>cyclic isotonic projection</strong> (↓ strike, ↑ expiry)</span></div>
+      <div class="krow"><span class="k">conditional_arb_1</span><span class="d">“IF A: B” obeys <strong>Fréchet bounds</strong> — max(0,(a+b−1)/a) ≤ c ≤ min(1,b/a); nested exact c=b/a</span></div>
+      <div class="krow"><span class="k">surface_arb_1</span><span class="d">normal-CDF fit to each strike ladder · <span class="n">225</span> trades</span></div>
+      <div class="krow"><span class="k">semantic_arb</span><span class="d">LLM asserts meaning-only relations, prices hidden → <strong>POCS projection</strong>; ~2,485 duplicate pairs</span></div>
+      <div class="krow"><span class="k">stockpile_facts_1</span><span class="d">curated USGS/NDS public record answers fact markets · <span class="n">624</span> trades (+ coherence sibling)</span></div>
     </div>
-    <div class="stats" style="grid-template-columns:repeat(4,1fr)">
-      <div class="stat"><div class="v">106,915</div><div class="k">markets cached</div></div>
-      <div class="stat"><div class="v">23,616</div><div class="k">trades placed</div></div>
-      <div class="stat"><div class="v">Ṁ227,271</div><div class="k">total staked</div></div>
-      <div class="stat"><div class="v">1,441</div><div class="k">resolutions realized</div></div>
+  </div>
+  <p class="footnote">no data feed, no opinion about the world — only internal consistency · ~50k markets in scope</p>
+</section>
+
+<!-- 5 · BOTS: STOCHASTIC -->
+<section class="slide">
+  <p class="eyebrow">01 · Bots — stochastic pricers</p>
+  <h2>From lognormal baseline to<br>an empirical pricer that earned its promotion.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">diffusion_mc_1 ★</span><span class="d"><strong>kernel-smoothed block bootstrap MC</strong> — Student-t kernel tails, vol clustering preserved. Gate: beats the lognormal on <strong>Brier, PnL, Sharpe &amp; worst-fold</strong> (8 commodities × 5 folds) → <span class="up">promoted</span> · <span class="n">3,388</span> trades</span></div>
+      <div class="krow"><span class="k">commodity_spot_1</span><span class="d">zero-drift lognormal + the <strong>unit/currency firewall</strong> (rejects CNY, compounds, wrong units) · retired in favor of its subclass</span></div>
+      <div class="krow"><span class="k">pair_trading_1</span><span class="d">cointegration overlay — OLS β, <strong>OU half-life</strong>, E[Δs]=(μ−s₀)(1−e<sup>−θT</sup>), z-entry 1.5 · <span class="n">2,088</span> trades</span></div>
+      <div class="krow"><span class="k">ensemble_1</span><span class="d">multi-source lognormal fusion · vol retune 0.5→0.15 = <span class="up">+41% Brier skill</span> · <span class="n">866</span> trades</span></div>
+      <div class="krow"><span class="k">commodity_1 · enso_1</span><span class="d">ag-futures lognormal · <strong>Gaussian persistence</strong> on NOAA's Niño index · <span class="n">829 · 637</span> trades</span></div>
+      <div class="krow"><span class="k">mean_reverter</span><span class="d">EMA fade — the reference “how to write a bot” template</span></div>
+    </div>
+  </div>
+  <p class="footnote">the diffusion gate first said NO — the artifact (uncapped backtest) was diagnosed and the verdict reversed with evidence</p>
+</section>
+
+<!-- 6 · BOTS: FUNDAMENTALS -->
+<section class="slide">
+  <p class="eyebrow">01 · Bots — fundamentals (one source, one bounded drift each)</p>
+  <h2>Nine single-source signal bots.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">cotton_fundamental_1</span><span class="d">USDA stocks-to-use drift — the one signal beating zero-drift OOS · Brier <span class="up n">+40.7%</span> skill, hit-rate 71–79%</span></div>
+      <div class="krow"><span class="k">cocoa_fundamental_1</span><span class="d">vol-anchored cocoa · <span class="n">+40.5%</span> skill</span></div>
+      <div class="krow"><span class="k">coffee_consumption_1</span><span class="d">FAS consumption-growth CDF · +26.2% skill, kept small</span></div>
+      <div class="krow"><span class="k">fas_balance_1</span><span class="d">carries FAS balances to far-dated quantity markets</span></div>
+      <div class="krow"><span class="k">cftc_softs_1</span><span class="d">CFTC positioning drift · <span class="n">Ṁ18,044</span> staked</span></div>
+      <div class="krow"><span class="k">weather_cocoa_1</span><span class="d">open-meteo growing-region anomalies · shipped live</span></div>
+      <div class="krow"><span class="k">nass_cotton_1</span><span class="d">production-weighted per-state crop-condition index</span></div>
+      <div class="krow"><span class="k">news_drift_1 “007”</span><span class="d">local LLM digests commodity RSS → signed, 36h-decayed drift · <span class="n">2,760</span> trades</span></div>
+      <div class="krow"><span class="k">wasde_event</span><span class="d">ending-stocks surprise overlay — abstains until the next print</span></div>
     </div>
   </div>
 </section>
 
-<!-- 7 · STRUCTURAL -->
+<!-- 7 · BOTS: LLM -->
 <section class="slide">
-  <p class="eyebrow">04 · The fleet — structural arbitrage</p>
-  <h2>Coherence is free money:<br>probabilities must fit together.</h2>
+  <p class="eyebrow">01 · Bots — LLM forecasters</p>
+  <h2>Making small local models produce tradeable numbers.</h2>
   <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">llm_forecaster</span><span class="d"><strong>percentile→CDF</strong>: one call returns p10–p90 → fit a normal → price <em>every strike</em> analytically; spread ×1.5 vs measured overconfidence (57–71% coverage)</span></div>
+      <div class="krow"><span class="k">llm_ag_coverage</span><span class="d">same engine scoped to the ag “0.50 sea” — the taker side of Ṁ40k real AMM liquidity provision into 134 thin markets</span></div>
+      <div class="krow"><span class="k">mercury_ensemble_1</span><span class="d"><strong>Bayesian-mixture calibration</strong> — 20 samples over temperatures → posterior-predictive mean; <strong>law of total variance</strong> splits epistemic vs aleatoric; split juries abstain; disagreement-shrinkage toward market. The one sanctioned hosted-inference experiment.</span></div>
+    </div>
+    <div class="callout" style="margin-top:26px">Model choice is empirical: <code>llm-bench</code> scores validity / coverage / error / latency — it picked qwen3 and gemma4, and rejected Qwythos-9B.</div>
+  </div>
+</section>
+
+<!-- 8 · BOTS: CONSENSUS + ADVERSARIAL -->
+<section class="slide">
+  <p class="eyebrow">01 · Bots — consensus &amp; adversarial (the comment society)</p>
+  <h2>A society that trades on the crowd —<br>and audits it with evidence.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">consensus_1</span><span class="d">pools ≥3 bot forecasters per market, then <strong>Platt-extremizes</strong>: p̂ = σ(√3·logit(p̄)) — the fix for ensembles that hedge toward 0.5 · <span class="n">357</span> trades</span></div>
+      <div class="krow"><span class="k">the judge</span><span class="d">never judges <em>reasoning</em> (the paper's negative result) — rules a comment unsound only when its <strong>factual claims contradict an independent evidence pack</strong> · verdicts: <span class="n">797 sound · 211 unsound · 501 noise</span></span></div>
+      <div class="krow"><span class="k">adversary_metals_1</span><span class="d">fades bad bettors — but only when they're unsound <em>and</em> on the wrong side of the data anchor; wrong-reasoning-right-conclusion is never faded</span></div>
+    </div>
+  </div>
+  <p class="footnote">Bridgewater supervisor pattern, AIA Forecaster paper (arXiv:2511.07678) · ~1M comments from 66 tal bots · all local inference</p>
+</section>
+
+<!-- 9 · LOCAL COMPUTE: HOSTING -->
+<section class="slide">
+  <p class="eyebrow">02 · Local compute &amp; local bots</p>
+  <h2>Stand up the org's owned-hardware inference layer.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">tal #817 · #863</span><span class="d">Mac Studio Ollama Gemma wired into the LiteLLM proxy as a bot backend (merged) + hardened local-model calls (merged)</span></div>
+      <div class="krow"><span class="k">vLLM on Metal</span><span class="d">Qwen3-32B-MLX-4bit served on Apple silicon</span></div>
+      <div class="krow"><span class="k">keep-warm ops</span><span class="d">launchd agents keeping Gemma warm + concurrency benchmarks</span></div>
+      <div class="krow"><span class="k">tal #877</span><span class="d">compact bot prompts + context budgets + prompt-diagnostics migration (+1,780 lines, merged)</span></div>
+      <div class="krow"><span class="k">tal #1256</span><span class="d"><strong>HMM regime router</strong> — Baum-Welch + Viterbi in pure numpy, QUIET/SIGNAL/STORM, routing-only, 127 tests → <strong class="up">precision@100: 76% vs 52%</strong></span></div>
+      <div class="krow"><span class="k">tal #1258</span><span class="d">bot universes auto-grown 1 hop along the measurable lead/lag graph</span></div>
+    </div>
+  </div>
+  <p class="footnote">local bots on the clone: llm_forecaster · llm_ag_coverage · 007 · semantic_arb · the comment judge — all local-only inference</p>
+</section>
+
+<!-- 10 · LOCAL COMPUTE: WEIGHTED DIE -->
+<section class="slide">
+  <p class="eyebrow">02 · Local compute — modelrank &amp; the weighted die</p>
+  <h2>Pricing local models onto the leaderboard — by electricity.</h2>
+  <div class="grow">
+    <p>The fleet samples models with probability ∝ inverse measured $/call. Local models bill <strong>$0</strong> through the proxy — so the die could never reprice them.</p>
+    <div class="formula">$/token = (watts / 1000) × ($/kWh) ÷ (tokens_per_sec × 3600)</div>
     <ul>
-      <li><strong>ladder_arb</strong> — P(X&gt;K) must fall in K → <strong>weighted isotonic regression (PAVA)</strong>; trade off-curve strikes. The fleet's biggest trader: <span class="mono">3,939</span> trades over ~50k markets</li>
-      <li><strong>term_structure</strong> — fix the strike, vary the date → <strong>Gaussian kernel smoother</strong> fills stale dates from traded anchors only</li>
-      <li><strong>stockpile_grid_arb</strong> — 2-D monotone surfaces via <strong>cyclic isotonic projection</strong> (↓ strike, ↑ expiry)</li>
-      <li><strong>conditional_arb</strong> — “IF A: B” must obey <strong>Fréchet bounds</strong>: max(0,(a+b−1)/a) ≤ c ≤ min(1, b/a) — nested case exact, c = b/a</li>
-      <li><strong>semantic_arb</strong> — LLM asserts meaning-only relations, prices hidden; <strong>POCS projection</strong> onto the feasible set (~2,485 duplicate pairs at different prices)</li>
+      <li>Measured on the Mac Studio M3 Ultra: <span class="mono">~68 W</span> wall · <span class="mono">~89 tok/s</span> gemma4 · <span class="mono">$0.13/kWh</span></li>
+      <li>Flows into the same mana-per-dollar column as cloud invoices — the die rewards efficiency across cloud <em>and</em> owned hardware</li>
+      <li>Follow-on: qwen3:8b measured at <span class="mono">~93 tok/s</span>, energy-priced, added to the die</li>
     </ul>
   </div>
-  <p class="footnote">model-free = no data feed to be wrong about · pure stdlib implementations</p>
+  <p class="footnote">tal PR #1666, merged · “run good models on owned hardware and let the die reward efficiency”</p>
 </section>
 
-<!-- 8 · DIFFUSION -->
+<!-- 11 · MEASURABLES: STATS -->
 <section class="slide">
-  <p class="eyebrow">04 · The fleet — stochastic pricers</p>
-  <h2>The empirical pricer that earned its promotion.</h2>
+  <p class="eyebrow">03 · Measurables</p>
+  <h2>Authoring the ontology → markets layer.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">#1211 Ebola/DRC</span><span class="d">6 measurables → <span class="n">12</span> markets — 2026 outbreak, borders, M23, Alphamin (<span class="sig">merged</span>)</span></div>
+      <div class="krow"><span class="k">#1283 cotton</span><span class="d">12 measurables → <strong class="n">153 markets published</strong> — ICE No.2, Cotlook A, polyester substitution spread, squeeze basis, USDA S&amp;D</span></div>
+      <div class="krow"><span class="k">#1273 deep</span><span class="d"><span class="n">+22,805</span> lines — Solaris/illumos infra (71 mkts), gas-turbine backlog, wind, AI-datacenter power, subsea cables</span></div>
+      <div class="krow"><span class="k">#1390 surface</span><span class="d">live clone prices overlaid on the surface UI (<span class="sig">merged</span>)</span></div>
+      <div class="krow"><span class="k">market creation</span><span class="d">H100 compute-price markets off the Ornn GPU index · zirconium nested conditional triangles · Ṁ40k real AMM depth into 134 thin ag markets</span></div>
+      <div class="krow"><span class="k">data behind it</span><span class="d">13+ sources normalized to one Observation schema · SMM 3-yr backfill (1,345 rows, ex-VAT, overlap-validated) · read-only tal Snowflake</span></div>
+    </div>
+  </div>
+  <p class="footnote">~50k+ insertions authored into tal overall</p>
+</section>
+
+<!-- 12 · MEASURABLES: COVERAGE -->
+<section class="slide">
+  <p class="eyebrow">03 · Measurables — company coverage</p>
+  <h2>11 companies across the InP optical supply chain.</h2>
+  <div class="grow">
+    <div class="klist">
+      <div class="krow"><span class="k">substrate</span><span class="d">Sumitomo Electric (#1564)</span></div>
+      <div class="krow"><span class="k">epiwafer</span><span class="d">IntelliEPI (#1562)</span></div>
+      <div class="krow"><span class="k">laser chips</span><span class="d">YJ Semiconductor (#1567) · MACOM (#1569)</span></div>
+      <div class="krow"><span class="k">assembly / modules</span><span class="d">Fabrinet · Viavi (#1586) · EZconn (#1591) · JPT (#1588 <span class="sig">merged</span>)</span></div>
+      <div class="krow"><span class="k">materials / OCS</span><span class="d">Mitsui Kinzoku (#1599 <span class="sig">merged</span>) · Elite Material (#1601) · Luster (#1603)</span></div>
+    </div>
+    <p style="margin-top:22px">~1,000+ lines per package: analyst report (Mermaid supply-chain maps, scenario tables, factual verification) + cheatsheet + measurables. Workflow moved from repo-YAML to a DB/API path mid-internship — re-shipped in the new shape.</p>
+  </div>
+</section>
+
+<!-- 13 · THURSTONE: REPLICATION -->
+<section class="slide">
+  <p class="eyebrow">04 · Thurstone — step 1: replicate Bradley-Terry</p>
+  <h2>First, reproduce the production leaderboard exactly.</h2>
+  <div class="grow">
+    <ul>
+      <li><span class="mono">1,799,991</span> Chatbot Arena battles · 129 models (2023–24) + a <span class="mono">135,634</span>-battle 2025 replication set</li>
+      <li>Pipeline reproduces the published Arena board to <strong>MAE 0.18 Elo, ρ = 0.99997</strong></li>
+      <li>Found the production subtlety: <code>tie</code> + <code>tie (bothbad)</code> must be pooled — dropping both-bad puts BT <span class="mono">13–19 Elo</span> off</li>
+      <li>Direct MLE (L-BFGS-B, analytic gradients), gauge anchor, profile likelihood for the lattice width — plus synthetic validation gates before any real-data claim</li>
+    </ul>
+  </div>
+  <p class="footnote">pre-registered · 42 pipeline scripts · 1,202-line LaTeX paper (Poddar &amp; Brodhead)</p>
+</section>
+
+<!-- 14 · THURSTONE: COMPARISON -->
+<section class="slide">
+  <p class="eyebrow">04 · Thurstone — step 2: run the comparison</p>
+  <h2>“When Better Choice Models Do Not Matter”</h2>
   <div class="grow"><div class="cols">
     <div>
-      <h3>diffusion_mc</h3>
       <ul>
-        <li><strong>Kernel-smoothed block bootstrap</strong>: ~10-day blocks of demeaned log returns keep vol clustering</li>
-        <li>Each day convolved with a variance-preserving <strong>Student-t kernel</strong> (Silverman bandwidth) — sims can exceed any observed move</li>
-        <li>Compound to horizon → P(exceed) read off the terminal distribution</li>
+        <li><strong>Thm 1</strong> — Davidson's tie parameter provably never touches decisive predictions; the Thurstonian lattice's always does</li>
+        <li><strong>The effect ceiling</strong> — an upper bound on the richer model's possible gain, <strong>computable before fitting</strong> (Thm 2 makes it sharp)</li>
+        <li>Result: ceiling ≤ <strong>0.23×</strong> the practical threshold; 4 pre-registered RQs confirm — sample size matters <strong>~26×</strong> more than link choice</li>
+        <li><strong>Error budget:</strong> drift &amp; cold-start dwarf model choice by 1–2 orders of magnitude</li>
       </ul>
     </div>
     <div>
-      <div class="callout">
-        Walk-forward gate: beats the lognormal on <strong>Brier, PnL, Sharpe <em>and</em> worst-fold</strong> across 8 commodities × 5 folds → <span class="up">promoted to live</span>.
-      </div>
       <div class="callout note">
-        The first gate said <em>no edge</em>. Diagnosed the artifact — an uncapped-from-0.50 backtest — re-ran under real stake caps, reversed the verdict <strong>with evidence</strong>.
+        <strong>The retraction:</strong> an exciting +5.79 “cold-start shrinkage” effect traced to a spline-interpolation bug — true value +0.017. Self-caught, retracted, documented, real mechanism found (ridge).
       </div>
     </div>
   </div></div>
 </section>
 
-<!-- 9 · LLM + COMMENTS -->
+<!-- 15 · THURSTONE: BOT RANKING -->
 <section class="slide">
-  <p class="eyebrow">04 · The fleet — LLM forecasters</p>
-  <h2>Local models, calibrated —<br>and a society that judges them.</h2>
+  <p class="eyebrow">04 · Thurstone — step 3: the bot rating system</p>
+  <h2>The same machinery now ranks GSMC's own bots.</h2>
   <div class="grow">
     <ul>
-      <li><strong>percentile→CDF</strong> — one local-model call returns p10–p90; fit a normal, price every strike analytically; spread widened 1.5× against measured overconfidence (57–71% interval coverage)</li>
-      <li><strong>mercury_ensemble</strong> — 20 samples across temperatures → posterior-predictive mean; <strong>law-of-total-variance</strong> splits epistemic vs aleatoric; split juries abstain</li>
-      <li><strong>comment consensus</strong> — pool ≥3 bot forecasters, <strong>Platt-extremize</strong>: p̂ = σ(√3·logit(p̄))</li>
-      <li><strong>adversarial judge</strong> — never judges <em>reasoning</em>; rules a comment unsound only when its <strong>factual claims contradict an independent evidence pack</strong> — then fades the bad bettor only if they also fight the data anchor</li>
+      <li><strong>Multiray global calibration</strong> — per-bot latent skill vectors Z∈R², per-condition rays + offsets, priced through the lattice race machinery, fit by alternating least squares</li>
+      <li>Rates the live fleet (<span class="mono">97</span> resolved multi-bot races, 11 bots) and <span class="mono">163</span> platform traders</li>
+      <li>Reproduces pairwise rankings where data are dense — academic method → internal production leaderboard, same repo</li>
+      <li>Honest finding: a held-out dimensionality test showed the <strong>2nd skill dimension is memorization, not structure</strong></li>
     </ul>
   </div>
-  <p class="footnote">judge verdicts live: 797 sound · 211 unsound · 501 noise — all local inference (qwen3:32b)</p>
+  <p class="footnote">the bridge: an Arena methodology paper that doubles as the company's bot leaderboard engine</p>
 </section>
 
-<!-- 10 · SHELVINGS -->
+<!-- 16 · EO: SYSTEM -->
 <section class="slide">
-  <p class="eyebrow">05 · Discipline</p>
-  <h2>What I <em>refused</em> to ship.</h2>
-  <div class="grow">
-    <ul>
-      <li><strong>Market maker</strong> — fully built (inventory skew, TTL requoting, toxic-flow widening), live-verified… then <strong>shelved on measurement</strong>: 0/5 canary fills from real counterparties, taker slippage already ~1.2%</li>
-      <li><strong>Atlantic-SST cocoa signal</strong> — validated, correctly signed, <em>too weak</em> → gated off</li>
-      <li><strong>Drought-cotton, cocoa-stocks, dup_arb</strong> — built, tested, kept <code>enabled: false</code></li>
-    </ul>
-    <div class="callout note">
-      The platform makes shipping cheap — so the bar is <strong>measured edge</strong>, not working code. Killing your own code with data is the job.
-    </div>
-  </div>
-</section>
-
-<!-- 11 · EO SAFETY -->
-<section class="slide">
-  <p class="eyebrow">06 · Real money</p>
-  <h2>equity_options: real listed options,<br>safety as architecture.</h2>
+  <p class="eyebrow">05 · Equity options — real listed options on Alpaca</p>
+  <h2>Real money, safety as architecture.</h2>
   <div class="grow"><div class="cols">
     <div>
       <ul>
-        <li>Fenced package — <strong>cannot import the clone client</strong> (enforced by an AST import-scan test)</li>
-        <li>Staged ladder: dry → paper → gated-live; <code>live.py</code> is a <strong>refusing stub</strong> — paper is the ceiling by construction</li>
+        <li>Fenced package — <strong>cannot import the clone client</strong> (AST import-scan test); own CLI/DB/ops</li>
+        <li>dry → paper → gated-live; <code>live.py</code> is a <strong>refusing stub</strong> — paper is the ceiling</li>
         <li>Ungated kill switch: <code>eo flatten</code></li>
       </ul>
     </div>
     <div>
       <ul>
-        <li><strong>Edge</strong> = e<sup>−rT</sup>·∫ payoff·(f<sub>P</sub> − f<sub>Q</sub>) — my MC density vs the option-implied one</li>
-        <li><strong>VRP</strong> — sell vol only when ATM IV &gt; model forecast; delta-hedged</li>
-        <li><strong>TSMOM v2</strong> + multi-factor fusion, point-in-time discipline (no lookahead)</li>
+        <li><strong>Edge</strong> = e<sup>−rT</sup>·∫payoff·(f<sub>P</sub> − f<sub>Q</sub>) — my MC density vs option-implied</li>
+        <li><strong>VRP</strong> — sell vol only when ATM IV &gt; forecast; delta-hedged</li>
+        <li><strong>TSMOM v2</strong> + multi-factor fusion, point-in-time (no lookahead), per-factor IC validation</li>
       </ul>
     </div>
   </div></div>
-  <p class="footnote">own CLI · own DB · own ops loop · SMM/GFEX/Snowflake data pipeline with ex-VAT alignment</p>
+  <p class="footnote">SMM/GFEX/Snowflake pipeline · ex-VAT alignment · back-cast data quarantined from backtests</p>
 </section>
 
-<!-- 12 · INCIDENT -->
+<!-- 17 · EO: INCIDENT -->
 <section class="slide">
-  <p class="eyebrow">06 · Real money — the incident</p>
+  <p class="eyebrow">05 · Equity options — the incident</p>
   <h2>One night the broker said<br>the book was worth <span class="down">$0</span>.</h2>
   <div class="grow">
     <ul>
@@ -309,9 +351,9 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:now
   <p class="footnote">when your ledger and your broker disagree, your ledger is the one that's wrong</p>
 </section>
 
-<!-- 13 · EO RESULT -->
+<!-- 18 · EO: RESULT -->
 <section class="slide">
-  <p class="eyebrow">06 · Real money — the result</p>
+  <p class="eyebrow">05 · Equity options — the result</p>
   <h2>The gate found exactly one edge:<br>precious-metals producers.</h2>
   <div class="grow"><div class="cols">
     <div>
@@ -332,142 +374,96 @@ td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:now
         <tr><td>COP · SLB</td><td class="n down">−0.029 · −0.025</td></tr>
         <tr><td class="dim">base metals</td><td class="n warn">marginal</td></tr>
       </table>
-      <p style="margin-top:20px; font-size:21px">Bi-weekly walk-forward gate: skill ≥ 0.02 <em>and</em> ≥ 12 trades. The <strong>producer thesis</strong>, validated twice — in research (lithium→ALB/SQM, t≈9–10) and in the live gate.</p>
+      <p style="margin-top:18px; font-size:20px">Walk-forward gate: skill ≥ 0.02 <em>and</em> ≥12 trades. The <strong>producer thesis</strong> validated twice — research (lithium→ALB/SQM, t≈9–10) and the live gate.</p>
     </div>
   </div></div>
-  <p class="footnote">paper PnL −$4.9k on $5.5k at risk → break-even wind-down · tuition that bought a risk system and a validated, narrow edge</p>
+  <p class="footnote">paper PnL −$4.9k on $5.5k at risk → break-even wind-down · tuition that bought a risk system and a validated edge</p>
 </section>
 
-<!-- 14 · TAL -->
+<!-- 19 · DIFFUSION FACTOR MODELS -->
 <section class="slide">
-  <p class="eyebrow">07 · Platform contributions</p>
-  <h2>tal: 8 merged PRs, ~50k lines authored.</h2>
+  <p class="eyebrow">06 · Diffusion factor models</p>
+  <h2>Generative return panels with factor structure.</h2>
   <div class="grow">
-    <div class="klist">
-      <div class="krow"><span class="k">#817 · #863 · #1666</span><span class="d">the local-model thread — Mac Studio Ollama/LiteLLM hosting, hardening, energy pricing</span></div>
-      <div class="krow"><span class="k">#877</span><span class="d">compact bot prompts + context budgets + prompt-diagnostics DB migration (+1,780 lines)</span></div>
-      <div class="krow"><span class="k">#1211 · #1283 · #1273</span><span class="d">market authoring — Ebola/DRC (merged) · cotton complex, <strong>153 markets</strong> · deep measurables (+22.8k lines)</span></div>
-      <div class="krow"><span class="k">#1256</span><span class="d"><strong>HMM regime router</strong> — Baum-Welch + Viterbi in pure numpy, QUIET/SIGNAL/STORM, routing-only, 127 tests → <strong class="up">precision@100: 76% vs 52%</strong></span></div>
-      <div class="krow"><span class="k">11 companies</span><span class="d">optical/AI-infra equity coverage across the InP supply chain — substrate → epiwafer → laser chip → module</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- 15 · WEIGHTED DIE -->
-<section class="slide">
-  <p class="eyebrow">07 · Platform contributions — the capstone</p>
-  <h2>Pricing local models onto the leaderboard — by electricity.</h2>
-  <div class="grow">
-    <p>The fleet samples models with probability ∝ inverse measured $/call — but local models bill <strong>$0</strong> through the proxy, so the “weighted die” could never reprice them.</p>
-    <div class="formula">$/token = (watts / 1000) × ($/kWh) ÷ (tokens_per_sec × 3600)</div>
     <ul>
-      <li>Measured on the Mac Studio M3 Ultra: <span class="mono">~68 W</span> wall · <span class="mono">~89 tok/s</span> (gemma4) · <span class="mono">$0.13/kWh</span></li>
-      <li>Flows into the same mana-per-dollar column as cloud invoices → the die rewards efficiency across cloud <em>and</em> owned hardware</li>
+      <li>From-scratch PyTorch implementation of <strong>Diffusion Factor Models</strong> (arXiv:2504.06566) — score-based generative returns, R = βF + ε, built for n ≪ d</li>
+      <li>OU forward process; score network whose <strong>bottleneck width = factor dimension k</strong> — tied orthonormal encoder/decoder = learned loadings + linear idiosyncratic skip</li>
+      <li>Denoising score-matching; reverse-SDE Euler-Maruyama sampling; evaluated by covariance recovery + <strong>min-variance portfolios vs Ledoit-Wolf/OAS</strong></li>
+      <li>Trained on tal's real 19-asset metals panel (XAU/XAG/XPT/XPD + MB critical-minerals codes, 2018–2026)</li>
     </ul>
-  </div>
-  <p class="footnote">PR #1666, merged · follow-on: qwen3:8b measured at ~93 tok/s and added to the die</p>
-</section>
-
-<!-- 16 · RESEARCH ARC -->
-<section class="slide">
-  <p class="eyebrow">08 · Research</p>
-  <h2>Three answers to “how should a portfolio trust its models?”</h2>
-  <div class="grow">
-    <div class="klist">
-      <div class="krow"><span class="k">DIffusion · June</span><span class="d"><strong>Diffusion Factor Models</strong> (arXiv:2504.06566) from scratch in PyTorch — score-based generative returns with factor structure; bottleneck width = factor dimension; trained on tal's 19-asset metals panel; min-variance test vs Ledoit-Wolf/OAS</span></div>
-      <div class="krow"><span class="k">RMT · July</span><span class="d"><strong>Marchenko–Pastur eigenvalue clipping</strong> on 466 S&amp;P stocks: 92.7% of correlation eigenvalues are noise → OOS min-variance Sharpe <span class="mono">0.00 → <strong class="up">0.78</strong></span>, realized vol −68%</span></div>
-      <div class="krow"><span class="k">Thurstone · July</span><span class="d"><strong>a pre-registered paper</strong>: when does a better choice model even matter? →</span></div>
+    <div class="callout">
+      Companion: <strong>RMT correlation denoising</strong> — Marchenko-Pastur clipping on 466 S&amp;P stocks: 92.7% of eigenvalues are noise → OOS min-variance Sharpe <span class="mono">0.00 → <strong class="up">0.78</strong></span>, vol −68%.
     </div>
   </div>
-  <p class="footnote">generative covariance → robust covariance → model-comparison methodology</p>
 </section>
 
-<!-- 17 · THURSTONE -->
+<!-- 20 · SANDBOX AGENTS -->
 <section class="slide">
-  <p class="eyebrow">08 · Research — the flagship</p>
-  <h2>“When Better Choice Models Do Not Matter”</h2>
-  <div class="grow"><div class="cols">
-    <div>
-      <ul>
-        <li><span class="mono">1,799,991</span> Chatbot Arena battles · 129 models; pipeline reproduces the public leaderboard to <strong>MAE 0.18 Elo</strong> (ρ=0.99997)</li>
-        <li><strong>Thm 1</strong> — Davidson's tie parameter provably never touches decisive predictions; the Thurstonian lattice's always does</li>
-        <li><strong>The effect ceiling</strong> — an upper bound on a richer model's possible gain, <strong>computable before fitting</strong> (Thm 2 makes it sharp)</li>
-        <li>Result: ceiling ≤ <strong>0.23×</strong> the practical threshold — and 4 pre-registered RQs confirm. Sample size matters <strong>~26×</strong> more than link choice</li>
-      </ul>
-    </div>
-    <div>
-      <div class="callout note">
-        <strong>The retraction:</strong> an exciting +5.79 “cold-start shrinkage” effect traced to a spline-interpolation bug — true value +0.017. Caught it myself, retracted it, documented it, found the real mechanism.
-      </div>
-      <div class="callout">
-        <strong>The bridge:</strong> the same lattice machinery, extended to <strong>multiray calibration</strong>, now rates GSMC's own bot fleet and 163 platform traders.
-      </div>
-    </div>
-  </div></div>
-</section>
-
-<!-- 18 · AGENT -->
-<section class="slide">
-  <p class="eyebrow">09 · Agents</p>
+  <p class="eyebrow">07 · Sandbox agents — CriticalMineralsBot</p>
   <h2>The model said the market was at 98.2%.<br>The market was at 5.6%.</h2>
   <div class="grow">
     <ul>
-      <li><strong>sandbox-agents</strong>: an LLM in a Docker sandbox proposes trade <em>intents</em>; a deterministic host gate owns the credential and executes bounded orders</li>
+      <li>Framework: LLM in a Docker sandbox proposes trade <em>intents</em>; a deterministic host gate owns the credential and executes bounded orders</li>
       <li>Built <strong>CriticalMineralsBot</strong> — lithium/cobalt/tantalum/NdPr profile, resolvability-aware rules, real SMM/GFEX data exports</li>
-      <li>A live dry run caught the model <strong>hallucinating the market price</strong> — a phantom 0.95-vs-0.056 edge the sizer would have traded. Prompting didn't fix it.</li>
+      <li>A live dry run caught the model <strong>hallucinating the market price</strong> — a phantom 0.95-vs-0.056 edge the sizer would have traded; prompting didn't fix it</li>
     </ul>
     <div class="callout">
       Fix: the model must <strong>echo the venue price back</strong> in a required field — rejected deterministically on &gt;0.05 mismatch, with tests. The single <code>--execute</code> run then <strong>correctly declined to trade</strong>.
     </div>
   </div>
-  <p class="footnote">don't trust the model — verify structurally</p>
+  <p class="footnote">don't trust the model — verify structurally · colima + Ollama qwen3-coder:30b, live-clone creds provisioned</p>
 </section>
 
-<!-- 19 · LESSON -->
+<!-- 21 · NEGATIVE RESULTS -->
 <section class="slide">
-  <p class="eyebrow">10 · The lesson</p>
-  <h2>Verify against ground truth.</h2>
+  <p class="eyebrow">08 · Built but not deployed</p>
+  <h2>Roughly a third of everything ended in a measured “no.”</h2>
   <div class="grow">
     <div class="klist">
-      <div class="krow"><span class="k">statistical</span><span class="d">the self-caught retraction — pre-registration and synthetic gates beat exciting results</span></div>
-      <div class="krow"><span class="k">financial</span><span class="d">the −$17k phantom cliff — when ledger and broker disagree, broker-truth wins, and breakers latch</span></div>
-      <div class="krow"><span class="k">agentic</span><span class="d">the hallucinated price — models must prove they read reality before they may act on it</span></div>
+      <div class="krow"><span class="k">market maker</span><span class="d">fully built + live-verified (A-S inventory skew, TTL requotes) → <strong>0/5 canary fills</strong> from real counterparties, slippage already ~1.2% → shelved</span></div>
+      <div class="krow"><span class="k">cocoa Atlantic SST</span><span class="d">sign validated (−1) but weak/nonlinear → gated off</span></div>
+      <div class="krow"><span class="k">drought · cocoa stocks</span><span class="d">built + validated, kept <code>enabled: false</code></span></div>
+      <div class="krow"><span class="k">coffee price signal</span><span class="d">strongest fundamental in the complex (b=−0.76, t=−7.5, R²=0.69) — <strong>zero resolvable markets to trade it</strong></span></div>
+      <div class="krow"><span class="k">Qwythos-9B · GDELT</span><span class="d">benchmarked / evaluated → rejected (kept gemma4; kept curated RSS)</span></div>
+      <div class="krow"><span class="k">multiray dim 2</span><span class="d">held-out test: the 2nd bot-skill dimension is memorization, not structure</span></div>
+      <div class="krow"><span class="k">energy options</span><span class="d">every energy underlier failed the walk-forward gate → excluded by the same gate that admitted precious producers</span></div>
+      <div class="krow"><span class="k">the retraction</span><span class="d">+5.79 “cold-start shrinkage” → interpolation artifact → +0.017 · retracted &amp; documented</span></div>
     </div>
-    <p style="margin-top:34px; font-size:26px">Same lesson, three layers. It's the reason a fleet of autonomous systems can run unattended every morning at 9:00.</p>
   </div>
+  <p class="footnote">every “no” is documented and reproducible — measure before you ship, and say no to your own code</p>
 </section>
 
-<!-- 20 · CLOSE -->
+<!-- 22 · CLOSE -->
 <section class="slide">
-  <p class="eyebrow">11 · Close</p>
+  <p class="eyebrow">Close</p>
   <h2>Built: the infrastructure, the models,<br>the science, the safety.</h2>
   <div class="grow">
     <div class="cols">
       <div>
-        <h3 class="sig">What's live today</h3>
+        <h3 class="sig">Live today</h3>
         <ul>
           <li>24 bots trading daily, unattended</li>
-          <li>The resolvability core, in every allocation</li>
-          <li>The energy-priced die, in the tal fleet</li>
-          <li>The bot leaderboard, rating everyone</li>
+          <li>Resolvability weighting in every allocation</li>
+          <li>The energy-priced die in the tal fleet</li>
+          <li>The Thurstone bot leaderboard</li>
         </ul>
       </div>
       <div>
-        <h3 class="sig">What I'd do next</h3>
+        <h3 class="sig">Next</h3>
         <ul>
-          <li>A learned cancellation predictor (sharper realized EV)</li>
+          <li>Learned cancellation predictor (sharper realized EV)</li>
           <li>Coverage for the resolvable long tail</li>
           <li>Productionize multiray ratings</li>
           <li>Precious-producer options, past paper</li>
         </ul>
       </div>
     </div>
-    <p style="margin-top:40px; font-size:28px"><strong>Thank you.</strong> <span class="dim">— questions welcome, honest numbers ready.</span></p>
+    <p style="margin-top:36px; font-size:27px"><strong>Thank you.</strong> <span class="dim">— questions welcome, honest numbers ready.</span></p>
   </div>
 </section>
 
 </div>
-<div class="hud"><span id="pos">1</span> / <span id="total">20</span> · ←→</div>
+<div class="hud"><span id="pos">1</span> / <span id="total">22</span> · ←→</div>
 
 <script>
 const slides=[...document.querySelectorAll('.slide')];
@@ -483,8 +479,7 @@ function show(n){
 }
 function fit(){
   const s=Math.min(innerWidth/1280,innerHeight/720);
-  const st=document.getElementById('stage');
-  st.style.transform=`translate(-50%,-50%) scale(${s})`;
+  document.getElementById('stage').style.transform=`translate(-50%,-50%) scale(${s})`;
 }
 addEventListener('resize',fit); fit();
 addEventListener('keydown',e=>{
