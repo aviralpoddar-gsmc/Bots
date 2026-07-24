@@ -24,6 +24,7 @@ _REGISTRY: dict[str, str] = {
     "atl3": "quantbots.sources.atl3:AtlanticSstSource",    # CPC tropical-Atlantic SST anomaly (keyless)
     "usdm": "quantbots.sources.usdm:UsdmSource",          # US Drought Monitor DSCI by state (keyless JSON)
     "ice_stocks": "quantbots.sources.ice_stocks:IceStocksSource",  # ICE certified cocoa stocks (keyless .xls)
+    "ornn": "quantbots.sources.ornn:OrnnComputeSource",    # Ornn GPU compute-price index (keyless JSON)
 }
 
 

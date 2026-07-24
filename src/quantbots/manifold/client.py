@@ -260,6 +260,46 @@ class ManifoldClient:
         return self._request("POST", f"market/{market_id}/add-liquidity",
                              data={"amount": int(amount)})
 
+    #: Valid CPMM seed-liquidity tiers (mana). Higher = deeper launch pool.
+    LIQUIDITY_TIERS = (100, 1000, 10000, 100000)
+
+    def create_binary_market(
+        self,
+        question: str,
+        *,
+        close_time_ms: int,
+        initial_prob: float,
+        description: str = "",
+        liquidity_tier: int = 100,
+        visibility: str = "public",
+        group_ids: list[str] | None = None,
+    ) -> dict:
+        """Create a BINARY market on the clone (standard v0 `POST /market`).
+
+        This is an OPERATOR / minting action — deliberately NOT wired into the bot
+        loop (runner/sizing never create markets). `initial_prob` is the launch
+        probability in (0.01, 0.99); `close_time_ms` is epoch milliseconds.
+        `liquidity_tier` is the seed-pool size in mana (creating costs the caller
+        that much). `description` is markdown — name the resolution source there
+        so the market is unambiguously resolvable.
+        """
+        if not 0.01 <= initial_prob <= 0.99:
+            raise ValueError("initial_prob must be in [0.01, 0.99]")
+        if liquidity_tier not in self.LIQUIDITY_TIERS:
+            raise ValueError(f"liquidity_tier must be one of {self.LIQUIDITY_TIERS}")
+        data: dict[str, Any] = {
+            "outcomeType": "BINARY",
+            "question": question,
+            "descriptionMarkdown": description,
+            "closeTime": int(close_time_ms),
+            "initialProb": int(round(initial_prob * 100)),
+            "visibility": visibility,
+            "liquidityTier": liquidity_tier,
+        }
+        if group_ids:
+            data["groupIds"] = group_ids
+        return self._request("POST", "market", data=data)
+
     def batch_bet(self, bets: list[dict]) -> Any:
         """Up to 50 bets. Each: {contractId, outcome, amount,
         limitProb?, expiresMillisAfter?, expiresAt?}. The maker posts both legs

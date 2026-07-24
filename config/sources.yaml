@@ -127,6 +127,21 @@ sources:
     params:
       commodities: [cotton, cocoa, coffee]
 
+  # Ornn GPU compute-price index (keyless JSON). entity GPU_<MODEL>, value in
+  # USD/GPU-hour. A genuine externally-published *price* (unlike most clone
+  # metrics), so compute-price threshold markets resolve YES/NO. Backfills full
+  # history on first ingest, then extends daily. Feeds a future compute-price bot.
+  - name: ornn
+    enabled: true
+    params:
+      gpus:
+        GPU_H100_SXM: "H100 SXM"
+        GPU_H200: "H200"
+        GPU_B200: "B200"
+        GPU_A100_SXM4: "A100 SXM4"
+        GPU_RTX_5090: "RTX 5090"
+        GPU_RTX_PRO_6000_WS: "RTX PRO 6000 WS"
+
   # Growing-region weather (keyless open-meteo). Single signal source for weather_anomaly.
   - name: weather
     enabled: true
