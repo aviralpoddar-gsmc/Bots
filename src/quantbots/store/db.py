@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -189,6 +189,86 @@ class Store:
     def known_entities(self) -> list[str]:
         rows = self.conn.execute("SELECT DISTINCT entity FROM observations").fetchall()
         return [r["entity"] for r in rows]
+
+    # --- comment verdicts + consensus (comments/ package) -----------------
+
+    def judged_comment_ids(self, market_id: str | None = None) -> set[str]:
+        """Comment ids already judged — the dedupe set for the judge cycle."""
+        q, params = "SELECT comment_id FROM comment_verdict", []
+        if market_id:
+            q += " WHERE market_id = ?"; params.append(market_id)
+        return {r["comment_id"] for r in self.conn.execute(q, params).fetchall()}
+
+    def record_comment_verdict(self, *, comment_id: str, market_id: str, author: str | None,
+                               entity: str | None, verdict: str, confidence: str,
+                               factual_errors: list | None, reply_draft: str | None,
+                               evidence: dict | None, bet_id: str | None,
+                               bet_outcome: str | None, bet_amount: float | None,
+                               judged_by: str) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO comment_verdict (comment_id, market_id, author, entity, verdict,
+                confidence, factual_errors, reply_draft, evidence, bet_id, bet_outcome,
+                bet_amount, judged_by, judged_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(comment_id) DO NOTHING
+            """,
+            (comment_id, market_id, author, entity, verdict, confidence,
+             json.dumps(factual_errors or []), reply_draft,
+             json.dumps(evidence or {}), bet_id, bet_outcome, bet_amount,
+             judged_by, _now()),
+        )
+        self.conn.commit()
+
+    def actionable_verdicts(self, market_id: str | None = None,
+                            max_age_hours: float = 48.0) -> list[dict]:
+        """High-confidence UNSOUND verdicts with an attached bet — the fade queue.
+        Only these ever trigger a counter-bet (the Bridgewater confidence gate)."""
+        cutoff = (datetime.now(UTC) - timedelta(hours=max_age_hours)).isoformat()
+        q = ("SELECT * FROM comment_verdict WHERE verdict='unsound' AND confidence='high'"
+             " AND bet_outcome IS NOT NULL AND judged_at >= ?")
+        params: list[Any] = [cutoff]
+        if market_id:
+            q += " AND market_id = ?"; params.append(market_id)
+        return [dict(r) for r in self.conn.execute(q + " ORDER BY judged_at DESC", params)]
+
+    def load_comment_verdicts(self, limit: int = 50) -> list[dict]:
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM comment_verdict ORDER BY judged_at DESC LIMIT ?", (limit,))]
+
+    def pending_replies(self, max_age_hours: float = 48.0) -> list[dict]:
+        """Actionable-quality verdicts with a drafted reply not yet posted.
+        (Reply-worthy = unsound + high + draft present; an attached bet is NOT
+        required — a wrong comment deserves correction even without one.)"""
+        cutoff = (datetime.now(UTC) - timedelta(hours=max_age_hours)).isoformat()
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM comment_verdict WHERE verdict='unsound' AND confidence='high'"
+            " AND reply_draft IS NOT NULL AND replied_at IS NULL AND judged_at >= ?"
+            " ORDER BY judged_at ASC", (cutoff,))]
+
+    def mark_replied(self, comment_id: str) -> None:
+        self.conn.execute("UPDATE comment_verdict SET replied_at=? WHERE comment_id=?",
+                          (_now(), comment_id))
+        self.conn.commit()
+
+    def upsert_comment_consensus(self, *, market_id: str, p_mean: float, p_extreme: float,
+                                 n_forecasters: int) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO comment_consensus (market_id, p_mean, p_extreme, n_forecasters, computed_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(market_id) DO UPDATE SET p_mean=excluded.p_mean,
+                p_extreme=excluded.p_extreme, n_forecasters=excluded.n_forecasters,
+                computed_at=excluded.computed_at
+            """,
+            (market_id, p_mean, p_extreme, n_forecasters, _now()),
+        )
+        self.conn.commit()
+
+    def load_comment_consensus(self, market_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM comment_consensus WHERE market_id=?", (market_id,)).fetchone()
+        return dict(row) if row else None
 
     # --- pnl (delegates to pnl.py) ---------------------------------------
 

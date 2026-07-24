@@ -140,6 +140,79 @@ def ingest(
     console.print(f"total {result.total} observations across {entities} entities")
 
 
+@app.command(name="judge-comments")
+def judge_comments(
+    bot: str = typer.Option("adversary_metals_1", "--bot", help="Judging bot (bots.yaml)"),
+    max_judgments: int = typer.Option(50, help="LLM judgment budget this run"),
+    max_markets: int = typer.Option(40, help="Most-recently-commented markets to scan"),
+    entities: str = typer.Option("GOLD,SILVER,PLATINUM,PALLADIUM,COPPER",
+                                 help="Anchor entities (comma-separated)"),
+    model: str = typer.Option("", help="Override the local judge model"),
+    post_replies: bool = typer.Option(False, "--post-replies",
+                                      help="LIVE: post drafted replies to unsound/high "
+                                      "comments (capped by --max-replies)"),
+    max_replies: int = typer.Option(7, help="Reply cap per run (3 runs/day ≈ 20/day)"),
+) -> None:
+    """Comment-judge cycle: read new comments on covered markets, judge them
+    against our data feeds (local LLM), store verdicts + reply drafts + crowd
+    consensus. Judging itself never bets; replies post ONLY with --post-replies.
+    Review with `comment-verdicts`; trade via the comment_fade / comment_consensus
+    bots (`quantbots run --bot ... --live`)."""
+    from .comments.cycle import post_pending_replies, run_judge_cycle
+    from .llm.client import LocalLLM
+
+    cfg = load_bot(bot)
+    llm = LocalLLM(model=model or None)
+    client = _client(cfg.api_key)
+    with Store() as store:
+        res = run_judge_cycle(
+            bot_name=cfg.name, client=client, store=store, llm=llm,
+            entities={e.strip().upper() for e in entities.split(",") if e.strip()},
+            max_judgments=max_judgments, max_markets=max_markets,
+            min_forecasters=int(cfg.params.get("min_forecasters", 3)),
+        )
+        n_replies = 0
+        if post_replies:
+            n_replies = post_pending_replies(client=client, store=store,
+                                             max_replies=max_replies)
+    mode = f"LIVE replies: posted {n_replies}" if post_replies else "replies DRY (drafts stored)"
+    console.print(
+        f"[green]judged[/] {res.comments_judged} of {res.comments_seen} comments across "
+        f"{res.markets_scanned} markets; consensus for {res.consensus_written} markets; {mode}")
+    n_action = sum(1 for v in res.verdicts
+                   if v["verdict"] == "unsound" and v["confidence"] == "high")
+    table = Table(title=f"verdicts this run ({n_action} actionable)")
+    for col in ("author", "verdict", "conf", "bet", "first error"):
+        table.add_column(col)
+    for v in res.verdicts:
+        errs = v.get("factual_errors") or []
+        bet = f"{v['bet_outcome']} Ṁ{v['bet_amount']:.0f}" if v.get("bet_outcome") else "-"
+        style = "bold red" if (v["verdict"] == "unsound" and v["confidence"] == "high") else ""
+        table.add_row(v["author"], f"[{style}]{v['verdict']}[/]" if style else v["verdict"],
+                      v["confidence"], bet, (errs[0][:70] if errs else "-"))
+    console.print(table)
+
+
+@app.command(name="comment-verdicts")
+def comment_verdicts(limit: int = typer.Option(25, help="Most recent N verdicts")) -> None:
+    """Review stored comment verdicts + drafted replies (the dry-run output)."""
+    import json as _json
+
+    with Store() as store:
+        rows = store.load_comment_verdicts(limit=limit)
+    if not rows:
+        console.print("no verdicts yet — run `quantbots judge-comments` first")
+        return
+    for r in rows:
+        style = {"unsound": "red", "sound": "green"}.get(r["verdict"], "dim")
+        console.print(f"[{style}]{r['verdict']:8}[/] [{r['confidence']:6}] "
+                      f"@{r['author']} on {r['market_id']} ({r['entity']})")
+        for e in _json.loads(r.get("factual_errors") or "[]"):
+            console.print(f"    [red]✗[/] {e}")
+        if r.get("reply_draft"):
+            console.print(f"    [cyan]draft reply:[/] {r['reply_draft']}")
+
+
 @app.command()
 def process() -> None:
     """Compute normalized SIG_* signals from ingested data (run after `ingest`)."""

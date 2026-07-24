@@ -88,6 +88,10 @@ DEFAULT_BOTS: dict[str, tuple[str, str]] = {
     "cotton_fundamental_1": ("Cottonfundamental1", "Cotton Fundamental 1 (AP)"),
     "cocoa_fundamental_1": ("CocoaFundamentalBot", "Cocoa Fundamental Bot (AP)"),
     "coffee_consumption_1": ("CoffeeConsumptionBot", "Coffee Consumption Bot (AP)"),
+    # Comment-society fleet (comments/ package). Usernames MUST stay in sync with
+    # comments/cycle.py ADVERSARY_FLEET (the already-addressed reply guard).
+    "adversary_metals_1": ("AdversaryMetalsBot", "Adversary Metals Bot (AP)"),
+    "consensus_1": ("ConsensusBot", "Consensus Bot (AP)"),
 }
 
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "bot-accounts.json"

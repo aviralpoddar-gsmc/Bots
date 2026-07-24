@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: comment-society judge cycle, 3x daily (08:40, 13:40, 18:40 local).
+  DRY by design — writes verdicts/consensus to the store; posts and bets NOTHING.
+  See src/quantbots/comments/ and scripts/comment_judge_cycle.sh.
+
+  Install:
+    cp scripts/com.quantbots.comments.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.quantbots.comments.plist
+  Run once now:  launchctl start com.quantbots.comments
+  Logs: data/comments.out.log / data/comments.err.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.quantbots.comments</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mikhail/Bots/scripts/comment_judge_cycle.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mikhail/Bots</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- ~/.local/bin holds `uv` (tal Snowflake shell-out); Homebrew holds doppler. -->
+        <key>PATH</key>
+        <string>/Users/mikhail/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- 3x daily: morning (post-Asia close), midday, evening (post-US open). -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>40</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mikhail/Bots/data/comments.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mikhail/Bots/data/comments.err.log</string>
+</dict>
+</plist>

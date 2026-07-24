@@ -855,3 +855,46 @@ bots:
       drift_cap: 0.10            # hard bound on the news drift
       min_drift: 0.005           # abstain if the resulting drift is negligible
       max_horizon_years: 1.0     # news decays fast -> never drift far-dated strikes
+
+  # ── Comment-society pilot (Bridgewater AIA-supervisor pattern) ──────────────
+  # Feed these via `quantbots judge-comments --bot adversary_metals_1` (dry: writes
+  # verdicts + reply drafts + consensus to the store; posts/bets NOTHING). The
+  # strategies below then trade those store rows through the normal runner.
+  # PILOT: metals only; clone configs to energy/softs/macro once judge quality is
+  # reviewed. Mint accounts before enabling (scripts/mint_bot_accounts.py).
+
+  # Adversarial fade: counter-bet HIGH-confidence provably-wrong comments. The
+  # judge marks `unsound` ONLY on evidence contradiction (never logic-vibes), so
+  # every fade is anchored to a feed number the commenter got wrong.
+  - name: adversary_metals_1
+    strategy: comment_fade
+    account_env: ADVERSARY_METALS_1_API_KEY   # to mint: @AdversaryMetalsBot
+    enabled: true   # LIVE (user go-ahead 2026-07-08)
+    limits:
+      max_order_size: 100
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.04
+      per_group_pct: 0.40
+      min_resolvability: 0.04    # metals spot ladders resolve reliably
+      max_total_exposure: 5000
+    params:
+      shift_per_verdict: 0.05    # fair-value shift against each bad bet
+      max_shift: 0.12            # cap across multiple bad comments on one market
+      max_age_hours: 48          # only fade fresh verdicts
+
+  # Consensus: trade toward the Platt-extremized crowd mean σ(√3·logit(p̄)).
+  - name: consensus_1
+    strategy: comment_consensus
+    account_env: CONSENSUS_1_API_KEY          # to mint: @ConsensusBot
+    enabled: true   # LIVE (user go-ahead 2026-07-08)
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.25
+      hold_band: 0.06            # only trade a real gap between crowd and price
+      per_group_pct: 0.40
+      min_resolvability: 0.04
+      max_total_exposure: 5000
+    params:
+      min_forecasters: 4         # a 2-bot "crowd" is noise
+      max_age_hours: 24

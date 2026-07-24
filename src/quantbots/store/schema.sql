@@ -76,3 +76,39 @@ CREATE TABLE IF NOT EXISTS observations (
 );
 CREATE INDEX IF NOT EXISTS idx_obs_entity ON observations(entity, ts);
 CREATE INDEX IF NOT EXISTS idx_obs_source ON observations(source, ts);
+
+-- Adversarial comment judging (comments/judge.py). One row per judged comment —
+-- the PRIMARY KEY doubles as the "already judged" dedupe. verdict follows the
+-- Bridgewater rule: `unsound` ONLY when the comment's factual claims contradict
+-- the supplied evidence, never on logic-vibes alone. replied_at / faded_at stay
+-- NULL in dry-run; they record the live actions once those are enabled.
+CREATE TABLE IF NOT EXISTS comment_verdict (
+    comment_id     TEXT PRIMARY KEY,
+    market_id      TEXT NOT NULL,
+    author         TEXT,
+    entity         TEXT,              -- linked entity (e.g. GOLD), if any
+    verdict        TEXT NOT NULL,     -- sound | unsound | noise
+    confidence     TEXT NOT NULL,     -- high | medium | low
+    factual_errors TEXT,              -- JSON list of contradicted claims
+    reply_draft    TEXT,              -- drafted reply (posted only when live)
+    evidence       TEXT,              -- JSON evidence pack shown to the judge
+    bet_id         TEXT,              -- the commenter's attached bet, if any
+    bet_outcome    TEXT,              -- YES | NO
+    bet_amount     REAL,
+    judged_by      TEXT NOT NULL,     -- bot name
+    judged_at      TEXT NOT NULL,
+    replied_at     TEXT,
+    faded_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_cv_market ON comment_verdict(market_id, judged_at);
+
+-- Bridgewater-style consensus per market: mean of the bettor crowd's implied
+-- probabilities, then Platt-extremized p̂ = σ(√3·logit(p̄)) (LLM/crowd forecasts
+-- hedge toward 0.5; extremization was the paper's biggest calibration lever).
+CREATE TABLE IF NOT EXISTS comment_consensus (
+    market_id     TEXT PRIMARY KEY,
+    p_mean        REAL NOT NULL,
+    p_extreme     REAL NOT NULL,
+    n_forecasters INTEGER NOT NULL,
+    computed_at   TEXT NOT NULL
+);

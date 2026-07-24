@@ -44,6 +44,9 @@ _REGISTRY: dict[str, str] = {
     "stockpile_coherence": "quantbots.strategies.stockpile_coherence:StockpileCoherenceStrategy",
     "market_maker": "quantbots.strategies.market_maker:MarketMakerStrategy",
     "news_drift": "quantbots.strategies.news_drift:NewsDriftStrategy",
+    # Comment-society bots (fed by `quantbots judge-comments` via the store).
+    "comment_fade": "quantbots.strategies.comment_fade:CommentFadeStrategy",
+    "comment_consensus": "quantbots.strategies.comment_consensus:CommentConsensusStrategy",
     "llm": "quantbots.strategies.llm:LLMStrategy",
     # Hosted-inference exception (see docs/mercury-ensemble-calibration.md).
     "mercury_ensemble": "quantbots.strategies.mercury_ensemble:MercuryEnsembleStrategy",

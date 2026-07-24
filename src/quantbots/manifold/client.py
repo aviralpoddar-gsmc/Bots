@@ -337,11 +337,38 @@ class ManifoldClient:
         """Up to 50 sells. Each: {contractId, outcome?, shares?}."""
         return self._request("POST", "batch-sell", data={"sells": sells})
 
-    def post_comment(self, contract_id: str, markdown: str) -> dict:
+    def get_comments(
+        self,
+        contract_id: str | None = None,
+        contract_slug: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        page: int = 0,
+    ) -> list[dict]:
+        """Fetch comments, newest-first. Requires a contract (id or slug) OR a
+        userId — the endpoint rejects a bare call. Comments that justify a trade
+        carry the bet inline (betId/betOutcome/betAmount); threaded replies carry
+        replyToCommentId. `content` is a TipTap richtext doc — see
+        `comments.reader.comment_text` for plain-text extraction."""
+        if not (contract_id or contract_slug or user_id):
+            raise ValueError("get_comments needs contract_id, contract_slug, or user_id")
+        params: dict[str, Any] = {"limit": limit, "page": page}
+        if contract_id:
+            params["contractId"] = contract_id
+        if contract_slug:
+            params["contractSlug"] = contract_slug
+        if user_id:
+            params["userId"] = user_id
+        return self._request("GET", "comments", params=params)
+
+    def post_comment(
+        self, contract_id: str, markdown: str, reply_to_comment_id: str | None = None
+    ) -> dict:
         """Post a markdown comment on a market. Used for trade-justification
         comments. Callers should wrap in try/except — a comment failure must
-        never unwind a real bet."""
-        return self._request("POST", "comment", data={
-            "contractId": contract_id,
-            "markdown": markdown,
-        })
+        never unwind a real bet. `reply_to_comment_id` threads the comment under
+        an existing one (the clone supports threaded replies)."""
+        data: dict[str, Any] = {"contractId": contract_id, "markdown": markdown}
+        if reply_to_comment_id:
+            data["replyToCommentId"] = reply_to_comment_id
+        return self._request("POST", "comment", data=data)
