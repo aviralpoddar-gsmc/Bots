@@ -36,6 +36,7 @@ _REGISTRY: dict[str, str] = {
     "cocoa_stocks": "quantbots.strategies.cocoa_stocks:CocoaStocksStrategy",
     "pair_trading": "quantbots.strategies.pair_trading:PairTradingStrategy",
     "ladder_arb": "quantbots.strategies.ladder_arb:LadderArbStrategy",
+    "conditional_arb": "quantbots.strategies.conditional_arb:ConditionalArbStrategy",
     "semantic_arb": "quantbots.strategies.semantic_arb:SemanticArbStrategy",
     "term_structure": "quantbots.strategies.term_structure:TermStructureStrategy",
     "stockpile_facts": "quantbots.strategies.stockpile_facts:StockpileFactsStrategy",

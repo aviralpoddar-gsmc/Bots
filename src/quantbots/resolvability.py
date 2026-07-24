@@ -36,6 +36,22 @@ _OPERATIONAL = re.compile(
     r"book-to-bill|backlog|headcount|penetration)\b", re.I)
 # Price / settlement questions (highest base rate, ~22%).
 _PRICE = re.compile(r"\b(price|spot|settlement|fixing|futures|basis)\b", re.I)
+# Proprietary specialty-chemical / minor-metal prices: named in the question but
+# quoted ONLY by paywalled price-reporting agencies (Asian Metal, SMM, Fastmarkets)
+# with no free public settlement and irregular/annual public disclosure (often just
+# the USGS annual average). A market dated quarterly/monthly on one of these usually
+# has no verifiable value at resolution time -> it CANCELs far more than a generic
+# price. Scored between inventory (0.06) and price (0.22). Verified on zirconium:
+# ZOC / oxychloride / ex-works-China sponge / zirconium chemicals only publish
+# publicly once a year via USGS (see [[zirconium-conditionals]]). The exchange and
+# precious-metal boosts below still override this for anything exchange-settled.
+# Kept deliberately NARROW: the unambiguous proprietary-benchmark signals only.
+# Generic chemistry words (oxide/carbonate/silicate) are intentionally excluded —
+# they would sweep in the entire rare-earth-oxide complex (~2k markets) whose
+# decided-rate we haven't validated. Scope this to the zirconium chemical chain
+# (oxychloride/ZOC, ex-works-China sponge) plus explicit proprietary-agency names.
+_PROPRIETARY_PX = re.compile(
+    r"\b(oxychloride|ZOC|ex[- ]works|sponge|Asian Metal|SMM|Fastmarkets)\b", re.I)
 # Trade-flow (customs data — modest).
 _TRADE = re.compile(r"\b(export|exports|import|imports|customs|shipments?)\b", re.I)
 _SPREAD = re.compile(r"\b(spread|ratio|premium|discount|crack)\b", re.I)
@@ -55,6 +71,10 @@ _PRECIOUS = re.compile(r"\b(gold|silver|platinum|palladium)\b", re.I)
 #   - buffer-stock procurement: a policy announcement -> low-ish.
 #   - "vault procurement ... kg" / "Project Vault": a quantity figure with no clear
 #     public reporting line -> production-like, ~never resolves.
+# Conditional ("B if A") markets: `IF [<predicate>] = YES: <quantity>`. A
+# conditional resolves YES/NO only if the predicate resolves (YES) AND the
+# quantity resolves — so its realized resolvability stacks BOTH legs' cancel risk.
+_CONDITIONAL = re.compile(r"^IF \[(.+)\] = YES: (.+)$", re.S)
 _CRIT_LIST = re.compile(r"\bcritical minerals list\b", re.I)
 _NDS_HOLD = re.compile(r"\bnational defense stockpile\b.*\bposition\b", re.I)
 _BUFFER = re.compile(r"\bbuffer[- ]stock procurement\b", re.I)
@@ -64,7 +84,14 @@ _VAULT_QTY = re.compile(r"\b(vault procurement|project vault)\b", re.I)
 def resolvability_score(question: str) -> float:
     """Estimate P(this market resolves YES/NO rather than CANCEL), in [0.01, 0.99],
     from the question text. Calibrated to observed decided-rates."""
-    q = question or ""
+    q = (question or "").strip()
+    # Conditional markets stack two legs of cancel risk: approximate realized
+    # resolvability as the product of the predicate's and quantity's scores. The
+    # legs are plain markets (never conditionals), so the recursion terminates.
+    cm = _CONDITIONAL.match(q)
+    if cm:
+        prod = resolvability_score(cm.group(1)) * resolvability_score(cm.group(2))
+        return min(max(prod, 0.01), 0.99)
     # Strategic-materials fact/policy markets — resolve off a government publication.
     if _CRIT_LIST.search(q):
         return 0.90
@@ -78,7 +105,10 @@ def resolvability_score(question: str) -> float:
     if _OPERATIONAL.search(q):
         base = 0.02
     elif _PRICE.search(q):
-        base = 0.22
+        # Proprietary specialty-chemical/minor-metal price with no public free
+        # settlement -> discount toward the inventory rate. An exchange/precious
+        # benchmark below can still lift it back up if one is named.
+        base = 0.10 if _PROPRIETARY_PX.search(q) else 0.22
     elif _INVENTORY.search(q):
         base = 0.06
     elif _SPREAD.search(q):

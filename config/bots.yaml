@@ -234,6 +234,34 @@ bots:
       informative_weight: 5.0
       min_strikes: 3
 
+  # Conditional ("B if A") coherence arb: a conditional prices P(B|A); with its
+  # predicate P(A) and quantity P(B) legs it must satisfy the Fréchet band, and
+  # EXACTLY c=b/a when the quantity implies the predicate (nested price bands, e.g.
+  # the zinc >=2800 / >=3400 triangles). Model-free; trades only the conditional.
+  # enabled:false pending a human go-live decision + account mint (@ConditionalArbBot).
+  # Resolvability is auto-scored as the PRODUCT of the two legs (double cancel risk),
+  # so only both-legs-resolvable (LME/LBMA) triangles clear min_resolvability.
+  - name: conditional_arb_1
+    strategy: conditional_arb
+    account_env: CONDITIONAL_ARB_1_API_KEY   # own account: @ConditionalArbBot (minted 2026-06-22, Ṁ100k)
+    enabled: true
+    limits:
+      max_order_size: 50
+      liquidity_pct: 0.25
+      max_price_impact: 0.05
+      hold_band: 0.05
+      max_run_budget: 20000
+      per_group_pct: 0.05         # one underlying's conditionals get <=5% of the book
+      min_ev: 0.05                # gates on REALIZED EV (paper EV x resolvability)
+      min_resolvability: 0.04     # product of legs; LME x LME ~ 0.12 clears, trigger predicates don't
+      dry_run_sample: 25
+      max_total_exposure: 8000
+      max_group_exposure: 1000
+    params:
+      dev_band: 0.03              # only correct the conditional when |target-c| > this
+      min_predicate_prob: 0.05    # below this, b/a is unstable + ~certain CANCEL
+      informative_band: 0.03      # a leg counts as informative if off 0.50 by > this
+
   # Term-structure (time) coherence: same metric+threshold across resolution dates
   # must trace a smooth curve in time. Pulls stale 0.50 dates toward the value their
   # traded time-neighbours imply (kernel smoother, informative-weighted). Orthogonal
