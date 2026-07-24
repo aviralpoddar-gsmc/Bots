@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -37,6 +38,24 @@ CACHE_DIR = _REPO_ROOT / "data" / "tal"
 TAL_REPO = Path(os.environ.get("TAL_REPO", Path.home() / "tal"))
 TAL_DB = os.environ.get("EQUITY_OPTIONS_TAL_DB", "MIKHAIL")
 _UV_DEPS = ["snowflake-connector-python", "cryptography", "sqlalchemy", "snowflake-sqlalchemy"]
+
+# launchd/cron hand us a minimal PATH that omits user-local tool dirs (uv lives in
+# ~/.local/bin, doppler in Homebrew), which breaks the `doppler run -- ... uv run`
+# shell-out with `env: uv: No such file or directory`. Augment PATH with the usual
+# install locations so the reader works regardless of how it was invoked.
+_EXTRA_BIN_DIRS = [
+    str(Path.home() / ".local" / "bin"),
+    str(Path.home() / ".cargo" / "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+]
+
+
+def _augmented_path() -> str:
+    """Existing PATH plus the common user/Homebrew tool dirs (deduped, order-preserved)."""
+    parts = _EXTRA_BIN_DIRS + os.environ.get("PATH", os.defpath).split(os.pathsep)
+    seen: set[str] = set()
+    return os.pathsep.join(p for p in parts if p and not (p in seen or seen.add(p)))
 
 # Runner executed INSIDE ~/tal: uses tal's own sanctioned connection, SELECT-only.
 _RUNNER = r'''
@@ -71,16 +90,25 @@ def query(sql: str, *, timeout: int = 300) -> list[dict]:
     """
     if not TAL_REPO.exists():
         raise TalUnavailable(f"tal repo not found at {TAL_REPO}")
+    path = _augmented_path()
+    # subprocess resolves argv[0] against the PARENT's PATH, not the env= we pass, so
+    # give it an absolute doppler. The augmented PATH then flows to the child where
+    # `env` looks up `uv`.
+    doppler = shutil.which("doppler", path=path)
+    if doppler is None:
+        raise TalUnavailable("doppler not found on PATH")
+    if shutil.which("uv", path=path) is None:
+        raise TalUnavailable("uv not found on PATH")
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
         f.write(_RUNNER)
         runner = f.name
     try:
-        cmd = ["doppler", "run", "--", "env", f"PYTHONPATH={TAL_REPO}",
+        cmd = [doppler, "run", "--", "env", f"PYTHONPATH={TAL_REPO}",
                "uv", "run", "--quiet"]
         for d in _UV_DEPS:
             cmd += ["--with", d]
         cmd += ["python", runner]
-        env = {**os.environ, "EO_TAL_SQL": sql, "EO_TAL_DB": TAL_DB}
+        env = {**os.environ, "PATH": path, "EO_TAL_SQL": sql, "EO_TAL_DB": TAL_DB}
         proc = subprocess.run(cmd, cwd=str(TAL_REPO), env=env, capture_output=True,
                               text=True, timeout=timeout)
         if proc.returncode != 0:

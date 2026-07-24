@@ -36,8 +36,10 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <!-- ~/.local/bin holds `uv` (tal Snowflake shell-out); without it the
+             tal-snapshot/tal-validate steps fail with `env: uv: No such file`. -->
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/Users/mikhail/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <!-- 1 = submit to Alpaca PAPER each cycle; set 0 for dry-run only. -->
         <key>EO_PAPER</key>
         <string>1</string>

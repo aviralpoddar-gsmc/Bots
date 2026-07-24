@@ -334,6 +334,26 @@ def run_backtest(cfg, underlying: str, *, as_of_dates: list[date], horizon_days:
                 fc = build_forecast(ticker=underlying, commodity=u.commodity,
                                     market=u.market_ticker, s0=spot, T=T, r=r,
                                     mode="drift_neutral", beta=beta, n_sims=n_sims, as_of=as_of)
+        elif mode == "fused":
+            # Momentum + tal price-consensus (+ macro) blended via research.fusion, same
+            # no-lookahead discipline. tal contributes only where it has a usable ladder.
+            from .research.fusion import fused_drift
+            beta = fit_beta(underlying, u.commodity, u.market_ticker,
+                            lookback_days=u.beta_lookback_days, as_of=as_of)
+            if beta is None or beta.weak:
+                continue
+            _lbs = cfg.forecast.get("momentum_lookbacks")
+            mu_view, _comps = fused_drift(
+                equity=underlying, commodity=u.commodity, beta_c=beta.beta_c, as_of=as_of,
+                spot=spot, horizon_years=T,
+                momentum_lookbacks=tuple(_lbs) if _lbs else None,
+                momentum_min_strength=float(cfg.forecast.get("momentum_min_strength", 0.0)))
+            if mu_view != 0.0:
+                res.signal_folds += 1
+            fc = build_forecast(ticker=underlying, commodity=u.commodity, market=u.market_ticker,
+                                s0=spot, T=T, r=r,
+                                mode="directional" if mu_view != 0.0 else "drift_neutral",
+                                mu_view=mu_view, beta=beta, n_sims=n_sims, as_of=as_of)
         else:
             fc = build_forecast(ticker=underlying, commodity=u.commodity, market=u.market_ticker,
                                 s0=spot, T=T, r=r, mode=mode, n_sims=n_sims, as_of=as_of)

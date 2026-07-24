@@ -1246,6 +1246,14 @@ dependencies = [
 dashboard = [
     { name = "flask" },
 ]
+equity-options = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "requests" },
+    { name = "scipy" },
+    { name = "typer" },
+    { name = "yfinance" },
+]
 llm = [
     { name = "openai" },
 ]
@@ -1273,20 +1281,26 @@ dev = [
 requires-dist = [
     { name = "flask", marker = "extra == 'dashboard'", specifier = ">=3.0" },
     { name = "matplotlib", marker = "extra == 'research'", specifier = ">=3.9" },
+    { name = "numpy", marker = "extra == 'equity-options'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'quant'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'research'", specifier = ">=1.26" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.30" },
+    { name = "pandas", marker = "extra == 'equity-options'", specifier = ">=2.2" },
     { name = "pandas", marker = "extra == 'research'", specifier = ">=2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.31" },
+    { name = "requests", marker = "extra == 'equity-options'", specifier = ">=2.31" },
     { name = "rich", specifier = ">=13.7" },
+    { name = "scipy", marker = "extra == 'equity-options'", specifier = ">=1.11" },
     { name = "scipy", marker = "extra == 'quant'", specifier = ">=1.11" },
     { name = "scipy", marker = "extra == 'research'", specifier = ">=1.11" },
     { name = "typer", specifier = ">=0.12" },
+    { name = "typer", marker = "extra == 'equity-options'", specifier = ">=0.12" },
     { name = "websockets", marker = "extra == 'realtime'", specifier = ">=12.0" },
+    { name = "yfinance", marker = "extra == 'equity-options'", specifier = ">=0.2" },
     { name = "yfinance", marker = "extra == 'research'", specifier = ">=0.2" },
 ]
-provides-extras = ["quant", "llm", "realtime", "dashboard", "research"]
+provides-extras = ["quant", "llm", "realtime", "dashboard", "research", "equity-options"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]

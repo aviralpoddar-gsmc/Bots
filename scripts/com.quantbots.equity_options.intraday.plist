@@ -29,8 +29,9 @@
     <string>/Users/mikhail/Bots</string>
     <key>EnvironmentVariables</key>
     <dict>
+        <!-- ~/.local/bin holds `uv` (tal Snowflake shell-out); see daily plist. -->
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/Users/mikhail/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>EO_PAPER</key>
         <string>1</string>
         <key>EO_INTERVAL</key>

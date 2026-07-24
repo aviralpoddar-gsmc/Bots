@@ -45,27 +45,42 @@ def candidates_for(u: Underlying, chain: list[dict], cfg: EquityOptionsConfig, *
         logger.info("recommend: %s beta unusable — abstain", u.ticker)
         return []
 
-    # Directional view: commodity TSMOM → signed equity drift (the validated edge).
-    # mode "momentum" (default) tilts f_P with the trend so the selector picks a
-    # bull-call spread in up-trends / bear-put in down-trends. "drift_neutral" disables it.
+    # Directional view → signed equity drift, tilting f_P so the selector picks a
+    # bull-call spread in up-trends / bear-put in down-trends.
+    #   "fused"    — momentum + tal price-consensus (+macro), the validated 2026-06-23 blend.
+    #   "momentum" — commodity TSMOM only.
+    #   "drift_neutral" — no tilt.
+    # tal's view is horizon-dependent, so for "fused" the drift is computed per-T; for
+    # "momentum" it's T-invariant (same value each call, so the per-T cache still holds).
     mode = fcast.get("mode", "momentum")
-    mu_view = 0.0
-    if mode == "momentum":
-        from .forecast.direction import momentum_drift
-        lbs = fcast.get("momentum_lookbacks")
-        mu_view, _ = momentum_drift(
-            commodity=u.commodity, beta_c=beta.beta_c,
-            lookbacks=tuple(lbs) if lbs else None,
-            min_strength=float(fcast.get("momentum_min_strength", 0.0)))
-    fmode = "directional" if (mode == "momentum" and mu_view != 0.0) else "drift_neutral"
+    lbs = fcast.get("momentum_lookbacks")
+    lookbacks = tuple(lbs) if lbs else None
+    min_strength = float(fcast.get("momentum_min_strength", 0.0))
+
+    def drift_for(T: float) -> float:
+        if mode == "fused":
+            from .research.fusion import fused_drift
+            mu, _ = fused_drift(equity=u.ticker, commodity=u.commodity, beta_c=beta.beta_c,
+                                spot=spot, horizon_years=T, momentum_lookbacks=lookbacks,
+                                momentum_min_strength=min_strength)
+            return mu
+        if mode == "momentum":
+            from .forecast.direction import momentum_drift
+            mu, _ = momentum_drift(commodity=u.commodity, beta_c=beta.beta_c,
+                                   lookbacks=lookbacks, min_strength=min_strength)
+            return mu
+        return 0.0  # drift_neutral
+
     cache: dict[float, Forecast | None] = {}
 
     def forecast_fn(T: float) -> Forecast | None:
         key = round(T, 4)
         if key not in cache:
+            mu_view = drift_for(T)
             cache[key] = build_forecast(
                 ticker=u.ticker, commodity=u.commodity, market=u.market_ticker,
-                s0=spot, T=T, r=r, q=q, mode=fmode, mu_view=mu_view,
+                s0=spot, T=T, r=r, q=q,
+                mode="directional" if mu_view != 0.0 else "drift_neutral", mu_view=mu_view,
                 n_sims=int(diff.get("n_sims", 20000)), period=diff.get("period", "10y"),
                 process=diff.get("process", "ksb"), beta=beta)
         return cache[key]

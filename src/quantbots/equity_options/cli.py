@@ -421,7 +421,7 @@ def backtest(underlying: str = typer.Option(None, help="Ticker (default: all ena
              start: str = typer.Option("2024-03-01", help="First as-of date (>= Alpaca history)"),
              fold_days: int = typer.Option(14, help="Days between walk-forward folds "
                                            "(14=bi-weekly denser sampling; 30=monthly)"),
-             mode: str = typer.Option(None, help="forecast mode: momentum | tal | "
+             mode: str = typer.Option(None, help="forecast mode: momentum | tal | fused | "
                                       "drift_neutral (default: config forecast.mode)"),
              config: str = typer.Option(None)):
     """Walk-forward gate: Brier-skill vs the implied baseline + realized PnL/Sharpe.

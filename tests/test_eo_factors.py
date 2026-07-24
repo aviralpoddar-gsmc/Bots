@@ -45,3 +45,41 @@ def test_fusion_adds_carry(monkeypatch):
     # negative beta flips the carry contribution sign
     mu2, comps2 = fusion.fused_drift(equity="X", commodity="COPPER", beta_c=-1.0)
     assert comps2["carry"] < 0
+
+
+def _neutral(monkeypatch):
+    monkeypatch.setattr(fusion, "_macro_series", lambda c: pd.Series(dtype=float))
+    monkeypatch.setattr(F, "carry_from_csv", lambda: None)
+    monkeypatch.setattr(F, "positioning_from_csv", lambda: None)
+
+
+def test_fusion_skips_tal_without_spot(monkeypatch):
+    # no spot -> tal factor never consulted (backward compatible with momentum-only)
+    _neutral(monkeypatch)
+    monkeypatch.setattr(fusion, "momentum_drift", lambda **k: (0.20, 0.8))
+    from quantbots.equity_options.forecast import signal
+    monkeypatch.setattr(signal, "tal_drift", lambda **k: (_ for _ in ()).throw(AssertionError()))
+    mu, comps = fusion.fused_drift(equity="FCX", commodity="COPPER", beta_c=1.0)
+    assert "tal" not in comps
+
+
+def test_fusion_adds_tal_blends_toward_view(monkeypatch):
+    _neutral(monkeypatch)
+    monkeypatch.setattr(fusion, "momentum_drift", lambda **k: (0.10, 0.5))
+    from quantbots.equity_options.forecast import signal
+    monkeypatch.setattr(signal, "tal_drift", lambda **k: (0.30, 0.8))  # strong bullish view
+    mu, comps = fusion.fused_drift(equity="FCX", commodity="COPPER", beta_c=1.0, spot=50.0)
+    assert "tal" in comps and comps["tal"] == pytest.approx(0.30)
+    # blend lands between momentum (0.10) and tal (0.30)
+    assert 0.10 < mu < 0.30
+
+
+def test_fusion_tal_zero_confidence_excluded(monkeypatch):
+    _neutral(monkeypatch)
+    monkeypatch.setattr(fusion, "momentum_drift", lambda **k: (0.10, 0.5))
+    from quantbots.equity_options.forecast import signal
+    monkeypatch.setattr(signal, "tal_drift", lambda **k: (0.0, 0.0))  # no usable ladder
+    mu, comps = fusion.fused_drift(equity="FCX", commodity="COPPER", beta_c=1.0, spot=50.0)
+    mu_ref, _ = fusion.fused_drift(equity="FCX", commodity="COPPER", beta_c=1.0)  # no tal at all
+    assert "tal" not in comps
+    assert mu == pytest.approx(mu_ref)   # zero-confidence tal must not change the blend

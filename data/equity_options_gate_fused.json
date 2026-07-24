@@ -1,0 +1,284 @@
+{
+  "results": {
+    "USO": {
+      "passed": false,
+      "brier_skill": -0.03007510302932692,
+      "pnl_sharpe": -0.353264551332298,
+      "n_trades": 7,
+      "reason": "insufficient data (folds=7, trades=7 < 12)"
+    },
+    "GDX": {
+      "passed": true,
+      "brier_skill": 0.05788609941142653,
+      "pnl_sharpe": 0.41817397873281653,
+      "n_trades": 42,
+      "reason": "brier_skill=+0.058 (need >=0.02), pnl_sharpe=+0.42 (need >=0.25), trades=42"
+    },
+    "GDXJ": {
+      "passed": true,
+      "brier_skill": 0.0379089860957974,
+      "pnl_sharpe": 0.38740425345051793,
+      "n_trades": 30,
+      "reason": "brier_skill=+0.038 (need >=0.02), pnl_sharpe=+0.39 (need >=0.25), trades=30"
+    },
+    "SIL": {
+      "passed": true,
+      "brier_skill": 0.033820190860001875,
+      "pnl_sharpe": 0.29443722104773673,
+      "n_trades": 18,
+      "reason": "brier_skill=+0.034 (need >=0.02), pnl_sharpe=+0.29 (need >=0.25), trades=18"
+    },
+    "WPM": {
+      "passed": true,
+      "brier_skill": 0.11109214694068936,
+      "pnl_sharpe": 0.5592339911759798,
+      "n_trades": 40,
+      "reason": "brier_skill=+0.111 (need >=0.02), pnl_sharpe=+0.56 (need >=0.25), trades=40"
+    },
+    "AEM": {
+      "passed": true,
+      "brier_skill": 0.15648643233486303,
+      "pnl_sharpe": 0.5244999362664762,
+      "n_trades": 39,
+      "reason": "brier_skill=+0.156 (need >=0.02), pnl_sharpe=+0.52 (need >=0.25), trades=39"
+    },
+    "NEM": {
+      "passed": true,
+      "brier_skill": 0.10056630143978418,
+      "pnl_sharpe": 0.5791714884749509,
+      "n_trades": 42,
+      "reason": "brier_skill=+0.101 (need >=0.02), pnl_sharpe=+0.58 (need >=0.25), trades=42"
+    },
+    "XLE": {
+      "passed": false,
+      "brier_skill": 0.05450947365777903,
+      "pnl_sharpe": 0.9364272793556719,
+      "n_trades": 4,
+      "reason": "insufficient data (folds=4, trades=4 < 12)"
+    },
+    "COPX": {
+      "passed": true,
+      "brier_skill": 0.11417902883426656,
+      "pnl_sharpe": 0.32030364403495626,
+      "n_trades": 12,
+      "reason": "brier_skill=+0.114 (need >=0.02), pnl_sharpe=+0.32 (need >=0.25), trades=12"
+    },
+    "PAAS": {
+      "passed": true,
+      "brier_skill": 0.09555694884033294,
+      "pnl_sharpe": 0.6158343601190618,
+      "n_trades": 21,
+      "reason": "brier_skill=+0.096 (need >=0.02), pnl_sharpe=+0.62 (need >=0.25), trades=21"
+    },
+    "XOM": {
+      "passed": false,
+      "brier_skill": 0.012905605612035131,
+      "pnl_sharpe": 0.14104685393207647,
+      "n_trades": 43,
+      "reason": "brier_skill=+0.013 (need >=0.02), pnl_sharpe=+0.14 (need >=0.25), trades=43"
+    },
+    "COP": {
+      "passed": false,
+      "brier_skill": 0.018976432051997505,
+      "pnl_sharpe": 0.2217800414735617,
+      "n_trades": 39,
+      "reason": "brier_skill=+0.019 (need >=0.02), pnl_sharpe=+0.22 (need >=0.25), trades=39"
+    },
+    "APA": {
+      "passed": false,
+      "brier_skill": 0.003966605571598669,
+      "pnl_sharpe": 0.39338916498879034,
+      "n_trades": 14,
+      "reason": "brier_skill=+0.004 (need >=0.02), pnl_sharpe=+0.39 (need >=0.25), trades=14"
+    },
+    "FNV": {
+      "passed": false,
+      "brier_skill": 0.08561391091659487,
+      "pnl_sharpe": 0.17528503062314543,
+      "n_trades": 25,
+      "reason": "brier_skill=+0.086 (need >=0.02), pnl_sharpe=+0.18 (need >=0.25), trades=25"
+    },
+    "EOG": {
+      "passed": false,
+      "brier_skill": 0.0035577148647404355,
+      "pnl_sharpe": 0.16250467783155034,
+      "n_trades": 23,
+      "reason": "brier_skill=+0.004 (need >=0.02), pnl_sharpe=+0.16 (need >=0.25), trades=23"
+    },
+    "FANG": {
+      "passed": false,
+      "brier_skill": 0.017566928800387793,
+      "pnl_sharpe": -0.17890686110498236,
+      "n_trades": 16,
+      "reason": "brier_skill=+0.018 (need >=0.02), pnl_sharpe=-0.18 (need >=0.25), trades=16"
+    },
+    "AG": {
+      "passed": false,
+      "brier_skill": 0.11042812034166627,
+      "pnl_sharpe": 0.8155612169644565,
+      "n_trades": 9,
+      "reason": "insufficient data (folds=9, trades=9 < 12)"
+    },
+    "OXY": {
+      "passed": true,
+      "brier_skill": 0.02413596998437395,
+      "pnl_sharpe": 0.43290359485086966,
+      "n_trades": 22,
+      "reason": "brier_skill=+0.024 (need >=0.02), pnl_sharpe=+0.43 (need >=0.25), trades=22"
+    },
+    "HL": {
+      "passed": false,
+      "brier_skill": 0.06191323870829235,
+      "pnl_sharpe": 0.8203399444347198,
+      "n_trades": 11,
+      "reason": "insufficient data (folds=11, trades=11 < 12)"
+    },
+    "DVN": {
+      "passed": false,
+      "brier_skill": 0.028511252877664872,
+      "pnl_sharpe": 0.20116197917322828,
+      "n_trades": 27,
+      "reason": "brier_skill=+0.029 (need >=0.02), pnl_sharpe=+0.20 (need >=0.25), trades=27"
+    },
+    "CVX": {
+      "passed": false,
+      "brier_skill": 0.0068949824750089705,
+      "pnl_sharpe": 0.17621869021899797,
+      "n_trades": 43,
+      "reason": "brier_skill=+0.007 (need >=0.02), pnl_sharpe=+0.18 (need >=0.25), trades=43"
+    },
+    "OIH": {
+      "passed": false,
+      "brier_skill": -0.013475084799679404,
+      "pnl_sharpe": -0.10360498218882722,
+      "n_trades": 17,
+      "reason": "brier_skill=-0.013 (need >=0.02), pnl_sharpe=-0.10 (need >=0.25), trades=17"
+    },
+    "HAL": {
+      "passed": false,
+      "brier_skill": 0.011907065649396587,
+      "pnl_sharpe": 0.35933370368500306,
+      "n_trades": 18,
+      "reason": "brier_skill=+0.012 (need >=0.02), pnl_sharpe=+0.36 (need >=0.25), trades=18"
+    },
+    "SCCO": {
+      "passed": true,
+      "brier_skill": 0.07362978215852245,
+      "pnl_sharpe": 0.5214794897879405,
+      "n_trades": 19,
+      "reason": "brier_skill=+0.074 (need >=0.02), pnl_sharpe=+0.52 (need >=0.25), trades=19"
+    },
+    "FCX": {
+      "passed": false,
+      "brier_skill": 0.023101427933327034,
+      "pnl_sharpe": 0.04179202433724232,
+      "n_trades": 44,
+      "reason": "brier_skill=+0.023 (need >=0.02), pnl_sharpe=+0.04 (need >=0.25), trades=44"
+    },
+    "VLO": {
+      "passed": false,
+      "brier_skill": -0.0041747307546651236,
+      "pnl_sharpe": 0.13120017180283497,
+      "n_trades": 27,
+      "reason": "brier_skill=-0.004 (need >=0.02), pnl_sharpe=+0.13 (need >=0.25), trades=27"
+    },
+    "PSX": {
+      "passed": false,
+      "brier_skill": 0.011256752255724756,
+      "pnl_sharpe": 0.15914073290847394,
+      "n_trades": 42,
+      "reason": "brier_skill=+0.011 (need >=0.02), pnl_sharpe=+0.16 (need >=0.25), trades=42"
+    },
+    "BHP": {
+      "passed": false,
+      "brier_skill": 0.020234795758700685,
+      "pnl_sharpe": 0.08643105980504931,
+      "n_trades": 32,
+      "reason": "brier_skill=+0.020 (need >=0.02), pnl_sharpe=+0.09 (need >=0.25), trades=32"
+    },
+    "TECK": {
+      "passed": false,
+      "brier_skill": -0.04307570038059261,
+      "pnl_sharpe": -0.023533032610669316,
+      "n_trades": 35,
+      "reason": "brier_skill=-0.043 (need >=0.02), pnl_sharpe=-0.02 (need >=0.25), trades=35"
+    },
+    "MPC": {
+      "passed": false,
+      "brier_skill": 0.028861403534514163,
+      "pnl_sharpe": 0.1315971302598624,
+      "n_trades": 27,
+      "reason": "brier_skill=+0.029 (need >=0.02), pnl_sharpe=+0.13 (need >=0.25), trades=27"
+    },
+    "EQT": {
+      "passed": false,
+      "brier_skill": -0.030098292400921878,
+      "pnl_sharpe": -0.08125989463292811,
+      "n_trades": 15,
+      "reason": "brier_skill=-0.030 (need >=0.02), pnl_sharpe=-0.08 (need >=0.25), trades=15"
+    },
+    "SLB": {
+      "passed": false,
+      "brier_skill": -0.025349618702869225,
+      "pnl_sharpe": -0.37451549941065243,
+      "n_trades": 27,
+      "reason": "brier_skill=-0.025 (need >=0.02), pnl_sharpe=-0.37 (need >=0.25), trades=27"
+    },
+    "RIO": {
+      "passed": false,
+      "brier_skill": 0.043581017936162314,
+      "pnl_sharpe": 0.23125547575351357,
+      "n_trades": 37,
+      "reason": "brier_skill=+0.044 (need >=0.02), pnl_sharpe=+0.23 (need >=0.25), trades=37"
+    },
+    "AR": {
+      "passed": false,
+      "brier_skill": -0.009191229057508465,
+      "pnl_sharpe": -0.46109425853272956,
+      "n_trades": 16,
+      "reason": "brier_skill=-0.009 (need >=0.02), pnl_sharpe=-0.46 (need >=0.25), trades=16"
+    },
+    "BKR": {
+      "passed": false,
+      "brier_skill": -0.07186756131124383,
+      "pnl_sharpe": -0.9406111700547887,
+      "n_trades": 15,
+      "reason": "brier_skill=-0.072 (need >=0.02), pnl_sharpe=-0.94 (need >=0.25), trades=15"
+    },
+    "RRC": {
+      "passed": false,
+      "brier_skill": -0.017184527059955546,
+      "pnl_sharpe": -0.6178976857051034,
+      "n_trades": 7,
+      "reason": "insufficient data (folds=7, trades=7 < 12)"
+    },
+    "VALE": {
+      "passed": false,
+      "brier_skill": 0.022567433414671934,
+      "pnl_sharpe": 0.18746132208641633,
+      "n_trades": 26,
+      "reason": "brier_skill=+0.023 (need >=0.02), pnl_sharpe=+0.19 (need >=0.25), trades=26"
+    },
+    "LYB": {
+      "passed": false,
+      "brier_skill": -0.03422241890327049,
+      "pnl_sharpe": 0.21326801162608675,
+      "n_trades": 8,
+      "reason": "insufficient data (folds=8, trades=8 < 12)"
+    },
+    "CF": {
+      "passed": false,
+      "brier_skill": -0.00111156029975934,
+      "pnl_sharpe": 0.20383933655414568,
+      "n_trades": 20,
+      "reason": "brier_skill=-0.001 (need >=0.02), pnl_sharpe=+0.20 (need >=0.25), trades=20"
+    },
+    "AA": {
+      "passed": false,
+      "brier_skill": 0.04879616885957794,
+      "pnl_sharpe": 0.09679414559839222,
+      "n_trades": 35,
+      "reason": "brier_skill=+0.049 (need >=0.02), pnl_sharpe=+0.10 (need >=0.25), trades=35"
+    }
+  }
+}

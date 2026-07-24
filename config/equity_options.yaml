@@ -38,7 +38,13 @@ underlyings:
 
 # Forecast channel toggles. v1 = deterministic commodity-beta + diffusion only.
 forecast:
-  mode: momentum            # directional signal: commodity TSMOM -> bull/bear spread (validated). drift_neutral disables.
+  mode: momentum            # commodity TSMOM -> bull/bear spread (the validated live edge).
+                            # NOTE 2026-06-24: "fused" (momentum+tal) was NOT promoted — its backtest gain
+                            # came from macro/carry/positioning (tal had ~no price history pre-2026-02 so it
+                            # contributed nothing in-sample), and LIVE the signal is broken: carry.csv is
+                            # stale (nan trailing) and tal rails the cap on stale clone markets. Fused code
+                            # is kept but OFF until the live tal feed is sane. "drift_neutral" disables the tilt.
+                            # `eo backtest` defaults its gate mode to THIS, so the gate matches what trades.
   # TSMOM construction (A/B-validated 2026-06-19, scripts/momentum_ab.py): blending 3/6/12-month
   # horizons + a trend-quality regime filter (abstain when |trend|/vol < min_strength) beat the
   # single-12m baseline — gate passes 2->3 (added VLO), and AEM/NEM improved on Sharpe+PnL+Brier.
